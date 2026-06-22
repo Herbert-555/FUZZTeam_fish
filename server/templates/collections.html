@@ -13,7 +13,6 @@
     </div>
 
     {% if collections %}
-    <form id="batch-form" method="POST">
         <table>
             <thead>
                 <tr>
@@ -37,7 +36,7 @@
                 {% for c in collections %}
                 <tr>
                     <td>
-                        <input class="col-cb" type="checkbox" name="ids[]" value="{{ c.id }}" form="batch-form">
+                        <input class="col-cb" type="checkbox" name="ids[]" value="{{ c.id }}">
                     </td>
                     <td><strong>{{ c.target_name }}</strong></td>
                     <td>{{ c.target_email }}</td>
@@ -64,7 +63,6 @@
                 {% endfor %}
             </tbody>
         </table>
-    </form>
     {% else %}
     <div class="empty">
         <div class="icon">📭</div>
@@ -86,7 +84,7 @@ function batchDelete() {
 
     var form = document.createElement('form');
     form.method = 'POST';
-    form.action = '/fishfish/collections/batch_delete';
+    form.action = '{{ admin_path }}/collections/batch_delete';
     ids.forEach(function(id) {
         var input = document.createElement('input');
         input.type = 'hidden';
@@ -102,7 +100,7 @@ function batchExport() {
     var ids = getCheckedIds();
     if (ids.length === 0) { alert('请先选择记录'); return; }
     var params = ids.map(function(id) { return 'ids[]=' + id; }).join('&');
-    window.location.href = '/fishfish/collections/export?' + params;
+    window.location.href = '{{ admin_path }}/collections/export?' + params;
 }
 </script>
 {% endblock %}

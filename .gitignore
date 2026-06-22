@@ -13,6 +13,7 @@ output/*.exe
 # Data files (runtime state)
 data/database.db
 data/exe_config.json
+data/exe_registry.json
 
 # Uploaded files (user data)
 uploads/

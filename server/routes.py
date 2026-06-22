@@ -1,9 +1,10 @@
 import os
 import json
+from functools import wraps
 from datetime import datetime
 from flask import (
     Blueprint, render_template, request, redirect, url_for, flash,
-    send_file, jsonify, current_app
+    send_file, jsonify, current_app, session
 )
 
 from .models import (
@@ -15,8 +16,45 @@ from .models import (
 # ---- Management Web UI Blueprint ----
 routes_web = Blueprint('routes_web', __name__)
 
+# Default credentials
+DEFAULT_USERNAME = 'fish'
+DEFAULT_PASSWORD = 'fishfish@123'
+
+
+def login_required(f):
+    @wraps(f)
+    def decorated(*args, **kwargs):
+        if not session.get('logged_in'):
+            return redirect(url_for('routes_web.login'))
+        return f(*args, **kwargs)
+    return decorated
+
+
+# ---- Login ----
+
+@routes_web.route('/login', methods=['GET', 'POST'])
+def login():
+    error = None
+    if request.method == 'POST':
+        username = request.form.get('username', '').strip()
+        password = request.form.get('password', '')
+        if username == DEFAULT_USERNAME and password == DEFAULT_PASSWORD:
+            session['logged_in'] = True
+            return redirect(url_for('routes_web.index'))
+        error = '账号或密码错误'
+    return render_template('login.html', error=error)
+
+
+@routes_web.route('/logout')
+def logout():
+    session.pop('logged_in', None)
+    return redirect(url_for('routes_web.login'))
+
+
+# ---- Dashboard ----
 
 @routes_web.route('/')
+@login_required
 def index():
     stats = get_stats()
     collections = get_all_collections()
@@ -26,30 +64,17 @@ def index():
 # ---- Target Management ----
 
 def _exe_filename(target_name, token):
-    from .config_manager import build_filename
-    return build_filename(target_name, token) + '.exe'
+    from .config_manager import build_filename, BIN_EXT
+    return build_filename(target_name, token) + BIN_EXT
 
 
 def _exe_exists(target_name, token):
-    from .exe_builder import OUTPUT_DIR
-    # Check all naming patterns: current template + legacy "fish_*" pattern
-    current = os.path.join(OUTPUT_DIR, _exe_filename(target_name, token))
-    if os.path.exists(current):
-        return True
-    # Also check legacy naming
-    safe_name = "".join(c if c.isalnum() or c in '._- ' else '_' for c in target_name)
-    legacy = os.path.join(OUTPUT_DIR, f"fish_{safe_name}_{token[:8]}.exe")
-    if os.path.exists(legacy):
-        return True
-    # Broad check: any .exe containing the token prefix
-    if os.path.exists(OUTPUT_DIR):
-        for f in os.listdir(OUTPUT_DIR):
-            if f.endswith('.exe') and token[:8] in f:
-                return True
-    return False
+    from .exe_builder import is_exe_registered
+    return is_exe_registered(token)
 
 
 @routes_web.route('/targets')
+@login_required
 def targets():
     all_targets = get_all_targets()
     for t in all_targets:
@@ -58,6 +83,7 @@ def targets():
 
 
 @routes_web.route('/targets/add', methods=['GET', 'POST'])
+@login_required
 def add_target_view():
     if request.method == 'POST':
         name = request.form.get('name', '').strip()
@@ -76,6 +102,7 @@ def add_target_view():
 
 
 @routes_web.route('/targets/batch', methods=['GET', 'POST'])
+@login_required
 def batch_add_targets():
     if request.method == 'POST':
         text = request.form.get('batch_data', '').strip()
@@ -108,6 +135,7 @@ def batch_add_targets():
 
 
 @routes_web.route('/targets/<int:target_id>')
+@login_required
 def target_detail(target_id):
     target = get_target_by_id(target_id)
     if not target:
@@ -123,6 +151,7 @@ def target_detail(target_id):
 
 
 @routes_web.route('/targets/<int:target_id>/delete', methods=['POST'])
+@login_required
 def delete_target(target_id):
     from .models import get_db
     conn = get_db()
@@ -135,6 +164,7 @@ def delete_target(target_id):
 
 
 @routes_web.route('/targets/<int:target_id>/build_exe', methods=['POST'])
+@login_required
 def build_exe_from_target(target_id):
     from .exe_builder import build_exe_async
 
@@ -148,12 +178,14 @@ def build_exe_from_target(target_id):
 
 
 @routes_web.route('/build_status_all')
+@login_required
 def build_status_all():
     from .exe_builder import get_all_build_status
     return jsonify(get_all_build_status())
 
 
 @routes_web.route('/targets/<int:target_id>/download_exe')
+@login_required
 def download_exe_from_target(target_id):
     target = get_target_by_id(target_id)
     if not target:
@@ -171,6 +203,7 @@ def download_exe_from_target(target_id):
 
 
 @routes_web.route('/targets/<int:target_id>/delete_exe', methods=['POST'])
+@login_required
 def delete_exe_from_target(target_id):
     target = get_target_by_id(target_id)
     if not target:
@@ -178,31 +211,33 @@ def delete_exe_from_target(target_id):
         return redirect(url_for('routes_web.targets'))
 
     filename = _exe_filename(target['name'], target['unique_token'])
-    from .exe_builder import OUTPUT_DIR
+    from .exe_builder import OUTPUT_DIR, unregister_exe
     filepath = os.path.join(OUTPUT_DIR, filename)
     if os.path.exists(filepath):
         os.remove(filepath)
-        flash('EXE已删除', 'success')
-    else:
-        flash('EXE文件不存在', 'error')
+    unregister_exe(target['unique_token'])
+    flash('EXE已删除', 'success')
 
     return redirect(url_for('routes_web.targets'))
 
 
 @routes_web.route('/targets/delete_all_exe', methods=['POST'])
+@login_required
 def delete_all_exe():
-    from .exe_builder import OUTPUT_DIR
+    from .exe_builder import OUTPUT_DIR, clear_exe_registry, BIN_EXT
     count = 0
     if os.path.exists(OUTPUT_DIR):
         for f in os.listdir(OUTPUT_DIR):
-            if f.endswith('.exe'):
+            if f.endswith(BIN_EXT):
                 os.remove(os.path.join(OUTPUT_DIR, f))
                 count += 1
-    flash(f'已清除 {count} 个EXE文件', 'success')
+    clear_exe_registry()
+    flash(f'已清除 {count} 个文件', 'success')
     return redirect(url_for('routes_web.targets'))
 
 
 @routes_web.route('/targets/batch_delete', methods=['POST'])
+@login_required
 def batch_delete_targets():
     from .models import get_db
     ids = request.form.getlist('ids[]')
@@ -219,6 +254,7 @@ def batch_delete_targets():
 
 
 @routes_web.route('/targets/batch_build_exe', methods=['POST'])
+@login_required
 def batch_build_exe_targets():
     from .exe_builder import build_exe_async
     ids = request.form.getlist('ids[]')
@@ -242,21 +278,37 @@ def _get_listen_url():
     return f'http://{host}:{port}'
 
 
+@routes_web.route('/exe/build_base', methods=['POST'])
+@login_required
+def build_base():
+    from .exe_builder import build_base_exe, BASE_EXE_PATH
+    try:
+        path = build_base_exe()
+        flash(f'基础EXE构建成功: {os.path.basename(path)}', 'success')
+    except Exception as e:
+        flash(f'构建失败: {e}', 'error')
+    return redirect(url_for('routes_web.exe_generate'))
+
+
 @routes_web.route('/exe/generate')
+@login_required
 def exe_generate():
-    from .exe_builder import OUTPUT_DIR
+    from .exe_builder import OUTPUT_DIR, BIN_EXT, BASE_EXE_PATH
     all_targets = get_all_targets()
     files = []
     if os.path.exists(OUTPUT_DIR):
         files = sorted(
-            [f for f in os.listdir(OUTPUT_DIR) if f.endswith('.exe')],
+            [f for f in os.listdir(OUTPUT_DIR) if f.endswith(BIN_EXT)],
             key=lambda f: os.path.getmtime(os.path.join(OUTPUT_DIR, f)),
             reverse=True
         )
-    return render_template('exe_generate.html', targets=all_targets, files=files)
+    has_base_exe = os.path.exists(BASE_EXE_PATH)
+    return render_template('exe_generate.html', targets=all_targets, files=files,
+                           has_base_exe=has_base_exe)
 
 
 @routes_web.route('/exe/generate/<int:target_id>', methods=['POST'])
+@login_required
 def build_single_exe(target_id):
     from .exe_builder import build_exe
 
@@ -277,6 +329,7 @@ def build_single_exe(target_id):
 
 
 @routes_web.route('/exe/generate/batch', methods=['POST'])
+@login_required
 def build_batch_exes():
     from .exe_builder import build_exes_batch
 
@@ -305,6 +358,7 @@ def build_batch_exes():
 
 
 @routes_web.route('/exe/download/<path:filename>')
+@login_required
 def download_exe(filename):
     from .exe_builder import OUTPUT_DIR
     filepath = os.path.join(OUTPUT_DIR, filename)
@@ -318,12 +372,14 @@ def download_exe(filename):
 
 
 @routes_web.route('/collections')
+@login_required
 def collections():
     all_collections = get_all_collections()
     return render_template('collections.html', collections=all_collections)
 
 
 @routes_web.route('/collections/<int:col_id>/delete', methods=['POST'])
+@login_required
 def delete_single_collection(col_id):
     from .models import delete_collection
     delete_collection(col_id)
@@ -332,6 +388,7 @@ def delete_single_collection(col_id):
 
 
 @routes_web.route('/collections/batch_delete', methods=['POST'])
+@login_required
 def batch_delete_collections():
     from .models import delete_collections_batch
     ids = request.form.getlist('ids[]')
@@ -342,6 +399,7 @@ def batch_delete_collections():
 
 
 @routes_web.route('/collections/export')
+@login_required
 def export_collections():
     import csv
     import io as io_mod
@@ -375,12 +433,14 @@ def export_collections():
 
 
 @routes_web.route('/uploads/<path:filename>')
+@login_required
 def uploaded_file(filename):
     uploads_dir = os.path.join(os.path.dirname(os.path.dirname(__file__)), 'uploads')
     return send_file(os.path.join(uploads_dir, filename))
 
 
 @routes_web.route('/icons/<path:filename>')
+@login_required
 def icon_file(filename):
     icons_dir = os.path.join(os.path.dirname(os.path.dirname(__file__)), 'output', 'icons')
     return send_file(os.path.join(icons_dir, filename))
@@ -390,6 +450,7 @@ def icon_file(filename):
 
 
 @routes_web.route('/exe/config', methods=['GET', 'POST'])
+@login_required
 def exe_config():
     from .config_manager import load_config, save_config, save_icon, ICONS_DIR
 

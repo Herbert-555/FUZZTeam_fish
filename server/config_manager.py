@@ -4,6 +4,7 @@ import json
 BASE_DIR = os.path.dirname(os.path.dirname(__file__))
 CONFIG_PATH = os.path.join(BASE_DIR, 'data', 'exe_config.json')
 ICONS_DIR = os.path.join(BASE_DIR, 'output', 'icons')
+BIN_EXT = '.exe'  # Output is always Windows PE for phishing targets
 
 DEFAULT_CONFIG = {
     'icon_path': '',

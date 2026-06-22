@@ -3,12 +3,34 @@
 {% block content %}
 <h1 style="margin-bottom:16px;">EXE生成</h1>
 
+<div class="card" style="margin-bottom:20px;">
+    <h2>基础 EXE</h2>
+    <p style="color:#888;font-size:13px;margin-bottom:12px;">
+        只需构建一次。之后每个目标的 EXE 通过复制+注入配置来生成，毫秒级完成。
+    </p>
+    <div style="display:flex;align-items:center;gap:12px;">
+        <span style="font-size:13px;color:{% if has_base_exe %}#2e7d32{% else %}#888{% endif %};">
+            {% if has_base_exe %}✅ 基础 EXE 已就绪{% else %}⚠️ 尚未构建基础 EXE{% endif %}
+        </span>
+        <form action="{{ url_for('routes_web.build_base') }}" method="POST">
+            <button class="btn btn-primary" {% if has_base_exe %}style="background:#888;"{% endif %}>
+                {{ '重新构建基础 EXE' if has_base_exe else '构建基础 EXE' }}
+            </button>
+        </form>
+    </div>
+</div>
+
 <div class="card">
     <h2>选择目标生成EXE</h2>
-    <p style="color:#888;font-size:13px;margin-bottom:16px;">
-        生成的EXE会嵌入目标的唯一Token，用于回传数据时匹配目标身份。
-        ⚠️ 生成过程需要1-3分钟，请耐心等待。
+    {% if not has_base_exe %}
+    <p style="color:#e76f51;font-size:13px;margin-bottom:16px;">
+        ⚠️ 请先构建基础 EXE，否则将使用 PyInstaller 逐个打包（慢）
     </p>
+    {% else %}
+    <p style="color:#888;font-size:13px;margin-bottom:16px;">
+        使用基础 EXE + 配置注入模式，生成速度极快。
+    </p>
+    {% endif %}
 
     {% if targets %}
     <form action="{{ url_for('routes_web.build_batch_exes') }}" method="POST">
