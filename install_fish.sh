@@ -49,28 +49,25 @@ docker run -d \
 
 log "等待 Web 服务启动"
 ADMIN_URL=""
+SERVER_IP=$(curl -s --connect-timeout 3 ifconfig.me 2>/dev/null || echo '')
 for _ in $(seq 1 60); do
-    ADMIN_URL=$(docker logs "$CONTAINER_NAME" 2>&1 | grep -oP '管理面板:\s+\Khttp://[^ ]+')
+    ADMIN_URL=$(docker logs "$CONTAINER_NAME" 2>&1 | sed -n 's/.*管理面板: *\(http:\/\/[^ ]*\).*/\1/p')
     if [ -n "$ADMIN_URL" ]; then
+        # Replace 0.0.0.0 with actual server IP
+        if [ -n "$SERVER_IP" ]; then
+            ADMIN_URL=$(echo "$ADMIN_URL" | sed "s|0\.0\.0\.0|$SERVER_IP|")
+        fi
         break
     fi
     sleep 2
 done
-
-# Replace 0.0.0.0 with actual server IP for external access
-SERVER_IP=$(curl -s --connect-timeout 3 ifconfig.me 2>/dev/null || echo '')
-if [ -n "$SERVER_IP" ] && [ -n "$ADMIN_URL" ]; then
-    ADMIN_URL=$(echo "$ADMIN_URL" | sed "s|0\.0\.0\.0|$SERVER_IP|")
-fi
 
 log "===================================================="
 log "FUZZTeam_fish 部署完成"
 if [ -n "$ADMIN_URL" ]; then
     log "管理面板: $ADMIN_URL"
 else
-    log "查看管理面板地址: docker logs $CONTAINER_NAME"
+    log "管理面板地址获取失败，查看日志: docker logs $CONTAINER_NAME"
 fi
 log "默认账号: fish / fishfish@123"
-log "管理端口: $MANAGE_PORT"
-log "数据监听端口: $LISTEN_PORT"
 log "===================================================="
