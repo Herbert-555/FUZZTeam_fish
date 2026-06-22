@@ -1,0 +1,185 @@
+{% extends "base.html" %}
+{% block title %}目标管理 - 钓鱼演练系统{% endblock %}
+{% block content %}
+<h1 style="margin-bottom:16px;">目标管理</h1>
+
+<div class="btn-group" style="margin-bottom:20px;">
+    <a href="{{ url_for('routes_web.add_target_view') }}" class="btn btn-primary">+ 添加目标</a>
+    <a href="{{ url_for('routes_web.batch_add_targets') }}" class="btn btn-success">批量导入</a>
+    <button class="btn" style="background:#e9c46a;" onclick="batchBuild()">批量生成EXE</button>
+    <button class="btn btn-danger" onclick="batchDelete()">批量删除目标</button>
+    <form action="{{ url_for('routes_web.delete_all_exe') }}" method="POST" style="display:inline;" onsubmit="return confirm('确认删除所有已生成的EXE文件？');">
+        <button class="btn btn-danger">清除所有EXE</button>
+    </form>
+</div>
+
+<div class="card">
+    <h2>目标列表 ({{ targets|length }})</h2>
+    {% if targets %}
+    <table>
+        <thead>
+            <tr>
+                <th style="width:40px;">
+                    <input type="checkbox" onclick="document.querySelectorAll('.target-cb').forEach(cb=>cb.checked=this.checked)">
+                </th>
+                <th>姓名</th>
+                <th>邮箱</th>
+                <th>部门</th>
+                <th>Token</th>
+                <th>是否上线</th>
+                <th>点击次数</th>
+                <th>创建时间</th>
+                <th>操作</th>
+            </tr>
+        </thead>
+        <tbody>
+            {% for t in targets %}
+            <tr id="row-{{ t.id }}">
+                <td>
+                    <input class="target-cb" type="checkbox" name="ids[]" value="{{ t.id }}">
+                </td>
+                <td><strong>{{ t.name }}</strong></td>
+                <td>{{ t.email or '-' }}</td>
+                <td>{{ t.department or '-' }}</td>
+                <td><code style="font-size:12px;">{{ t.unique_token[:8] }}...</code></td>
+                <td>
+                    {% if t.callback_count %}
+                    <span class="badge badge-yes">上线</span>
+                    {% else %}
+                    <span class="badge badge-no">未上线</span>
+                    {% endif %}
+                </td>
+                <td>{{ t.callback_count }}</td>
+                <td>{{ t.created_at }}</td>
+                <td>
+                    <a href="{{ url_for('routes_web.target_detail', target_id=t.id) }}" class="btn btn-sm btn-primary">详情</a>
+                    <button id="btn-gen-{{ t.id }}" class="btn btn-sm btn-success" onclick="buildExe({{ t.id }})">
+                        {% if t.exe_exists %}重新生成{% else %}生成EXE{% endif %}
+                    </button>
+                    <span id="exe-actions-{{ t.id }}" {% if not t.exe_exists %}style="display:none;"{% endif %}>
+                        <a id="btn-dl-{{ t.id }}"
+                           href="{{ url_for('routes_web.download_exe_from_target', target_id=t.id) }}"
+                           class="btn btn-sm" style="background:#e9c46a;">下载</a>
+                        <form action="{{ url_for('routes_web.delete_exe_from_target', target_id=t.id) }}" method="POST" style="display:inline;" onsubmit="return confirm('确认删除该目标的EXE文件？');">
+                            <button class="btn btn-sm" style="background:#e76f51;color:#fff;">删EXE</button>
+                        </form>
+                    </span>
+                    <form action="{{ url_for('routes_web.delete_target', target_id=t.id) }}" method="POST" style="display:inline;" onsubmit="return confirm('确认删除该目标及其所有关联数据？');">
+                        <button class="btn btn-sm btn-danger">删目标</button>
+                    </form>
+                </td>
+            </tr>
+            {% endfor %}
+        </tbody>
+    </table>
+    {% else %}
+    <div class="empty">
+        <div class="icon">🎯</div>
+        <p>暂无目标，请先添加</p>
+    </div>
+    {% endif %}
+</div>
+
+<script>
+function getCheckedIds() {
+    var cbs = document.querySelectorAll('.target-cb:checked');
+    return Array.from(cbs).map(function(cb) { return cb.value; });
+}
+
+function batchDelete() {
+    var ids = getCheckedIds();
+    if (ids.length === 0) { alert('请先选择目标'); return; }
+    if (!confirm('确认删除选中的 ' + ids.length + ' 个目标及其所有数据？')) return;
+
+    var form = document.createElement('form');
+    form.method = 'POST';
+    form.action = '/fishfish/targets/batch_delete';
+    ids.forEach(function(id) {
+        var input = document.createElement('input');
+        input.type = 'hidden';
+        input.name = 'ids[]';
+        input.value = id;
+        form.appendChild(input);
+    });
+    document.body.appendChild(form);
+    form.submit();
+}
+
+function batchBuild() {
+    var ids = getCheckedIds();
+    if (ids.length === 0) { alert('请先选择目标'); return; }
+
+    ids.forEach(function(id) {
+        var genBtn = document.getElementById('btn-gen-' + id);
+        if (genBtn && !genBtn.disabled) {
+            genBtn.disabled = true;
+            genBtn.textContent = '打包中...';
+        }
+    });
+
+    var form = document.createElement('form');
+    form.method = 'POST';
+    form.action = '/fishfish/targets/batch_build_exe';
+    ids.forEach(function(id) {
+        var input = document.createElement('input');
+        input.type = 'hidden';
+        input.name = 'ids[]';
+        input.value = id;
+        form.appendChild(input);
+    });
+    document.body.appendChild(form);
+
+    fetch(form.action, { method: 'POST', body: new FormData(form) })
+        .then(function(r) { return r.json(); })
+        .then(function(data) { console.log(data.message); });
+}
+
+function buildExe(targetId) {
+    var genBtn = document.getElementById('btn-gen-' + targetId);
+    genBtn.disabled = true;
+    genBtn.textContent = '打包中...';
+
+    fetch('/fishfish/targets/' + targetId + '/build_exe', { method: 'POST' })
+        .then(function(r) { return r.json(); })
+        .then(function(data) {
+            if (data.status !== 'ok') {
+                alert('生成失败: ' + data.message);
+                genBtn.disabled = false;
+                genBtn.textContent = '生成EXE';
+            }
+        })
+        .catch(function() {
+            genBtn.disabled = false;
+            genBtn.textContent = '生成EXE';
+        });
+}
+
+function refreshAllStatus() {
+    fetch('/fishfish/build_status_all')
+        .then(function(r) { return r.json(); })
+        .then(function(statuses) {
+            for (var targetId in statuses) {
+                var s = statuses[targetId];
+                var genBtn = document.getElementById('btn-gen-' + targetId);
+                var exeActions = document.getElementById('exe-actions-' + targetId);
+                if (!genBtn) continue;
+
+                if (s.status === 'building') {
+                    genBtn.disabled = true;
+                    genBtn.textContent = '打包中...';
+                } else if (s.status === 'done') {
+                    genBtn.disabled = false;
+                    genBtn.textContent = '重新生成';
+                    if (exeActions) exeActions.style.display = '';
+                } else if (s.status === 'error') {
+                    genBtn.disabled = false;
+                    genBtn.textContent = '生成EXE';
+                }
+            }
+        });
+}
+
+refreshAllStatus();
+setInterval(refreshAllStatus, 5000);
+</script>
+{% endblock %}

@@ -1,0 +1,28 @@
+# Python
+__pycache__/
+*.py[cod]
+*.pyo
+
+# PyInstaller build artifacts
+client_build/
+*.spec
+
+# Generated output
+output/*.exe
+
+# Data files (runtime state)
+data/database.db
+data/exe_config.json
+
+# Uploaded files (user data)
+uploads/
+
+# IDE
+.idea/
+.vscode/
+*.swp
+*.swo
+
+# OS
+.DS_Store
+Thumbs.db

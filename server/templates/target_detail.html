@@ -1,0 +1,133 @@
+{% extends "base.html" %}
+{% block title %}目标详情 - 钓鱼演练系统{% endblock %}
+{% block content %}
+<h1 style="margin-bottom:16px;">目标详情: {{ target.name }}</h1>
+
+<div class="card">
+    <h2>基本信息</h2>
+    <div class="detail-grid">
+        <div class="detail-item">
+            <div class="key">姓名</div>
+            <div class="val">{{ target.name }}</div>
+        </div>
+        <div class="detail-item">
+            <div class="key">邮箱</div>
+            <div class="val">{{ target.email }}</div>
+        </div>
+        <div class="detail-item">
+            <div class="key">部门</div>
+            <div class="val">{{ target.department or '未设置' }}</div>
+        </div>
+        <div class="detail-item">
+            <div class="key">Token</div>
+            <div class="val"><code>{{ target.unique_token }}</code></div>
+        </div>
+        <div class="detail-item">
+            <div class="key">创建时间</div>
+            <div class="val">{{ target.created_at }}</div>
+        </div>
+    </div>
+</div>
+
+<div class="card">
+    <h2>回传记录 ({{ collections|length }})</h2>
+    {% if collections %}
+    {% for c in collections %}
+    <div style="margin-bottom:24px;border-bottom:1px solid #eee;padding-bottom:16px;">
+        <div class="detail-grid">
+            <div class="detail-item">
+                <div class="key">IP地址</div>
+                <div class="val">{{ c.ip_address }}</div>
+            </div>
+            <div class="detail-item">
+                <div class="key">MAC地址</div>
+                <div class="val">{{ c.mac_address }}</div>
+            </div>
+            <div class="detail-item">
+                <div class="key">出口IP</div>
+                <div class="val"><code>{{ c.exit_ip or '-' }}</code></div>
+            </div>
+            <div class="detail-item">
+                <div class="key">主机名</div>
+                <div class="val">{{ c.hostname }}</div>
+            </div>
+            <div class="detail-item">
+                <div class="key">用户名</div>
+                <div class="val">{{ c.username }}</div>
+            </div>
+            <div class="detail-item">
+                <div class="key">回传时间</div>
+                <div class="val">{{ c.received_at }}</div>
+            </div>
+        </div>
+
+        {% if c.screenshot_path %}
+        <div style="margin-top:12px;">
+            <strong style="font-size:14px;color:#555;">截屏</strong><br>
+            <img src="{{ url_for('routes_web.uploaded_file', filename=c.screenshot_path) }}" class="screenshot-img" style="max-width:600px;margin-top:8px;" onclick="window.open(this.src)">
+        </div>
+        {% endif %}
+
+        {% if c.dir_info_parsed %}
+        <div style="margin-top:12px;">
+            <strong style="font-size:14px;color:#555;">文件列表</strong>
+            {% for dir_name, dir_data in c.dir_info_parsed.items() %}
+            <details style="margin-top:6px;" {% if dir_data.exists and not dir_data.error %}open{% endif %}>
+                <summary style="cursor:pointer;font-weight:600;font-size:13px;color:#4361ee;padding:4px 0;">
+                    📁 {{ dir_name }}
+                    {% if dir_data.tree %}<span style="font-weight:400;color:#888;">({{ dir_data.tree|length }} 项)</span>{% endif %}
+                </summary>
+                {% if not dir_data.exists %}
+                <div style="color:#999;padding-left:20px;">路径不存在</div>
+                {% elif dir_data.error %}
+                <div style="color:#999;padding-left:20px;">{{ dir_data.error }}</div>
+                {% else %}
+                <div style="max-height:360px;overflow-y:auto;background:#1a1a2e;border-radius:4px;padding:10px 14px;font-family:Consolas,monospace;font-size:12px;line-height:1.6;">
+                    {% for item in dir_data.tree %}
+                        {% if item.type == 'dir' %}
+                        <div style="color:#8bc34a;">📂 {{ item.name }}/</div>
+                            {% for child in item.children %}
+                            <div style="color:#e0e0e0;padding-left:24px;display:flex;justify-content:space-between;">
+                                <span>📄 {{ child.name }}</span>
+                                <span style="color:#999;flex-shrink:0;margin-left:12px;">
+                                {% set mb = child.size / 1048576 %}
+                                {% set kb = child.size / 1024 %}
+                                {% if mb >= 1 %}{{ '%.2f' % mb }} MB
+                                {% elif kb >= 1 %}{{ '%.1f' % kb }} KB
+                                {% else %}{{ child.size }} B{% endif %}
+                                </span>
+                            </div>
+                            {% endfor %}
+                        {% else %}
+                        <div style="color:#e0e0e0;display:flex;justify-content:space-between;">
+                            <span>📄 {{ item.name }}</span>
+                            <span style="color:#999;flex-shrink:0;margin-left:12px;">
+                            {% set mb = item.size / 1048576 %}
+                            {% set kb = item.size / 1024 %}
+                            {% if mb >= 1 %}{{ '%.2f' % mb }} MB
+                            {% elif kb >= 1 %}{{ '%.1f' % kb }} KB
+                            {% else %}{{ item.size }} B{% endif %}
+                            </span>
+                        </div>
+                        {% endif %}
+                    {% endfor %}
+                </div>
+                {% endif %}
+            </details>
+            {% endfor %}
+        </div>
+        {% endif %}
+    </div>
+    {% endfor %}
+    {% else %}
+    <div class="empty">
+        <div class="icon">📭</div>
+        <p>该目标暂无回传数据</p>
+    </div>
+    {% endif %}
+</div>
+
+<div class="btn-group">
+    <a href="{{ url_for('routes_web.targets') }}" class="btn" style="background:#eee;">返回列表</a>
+</div>
+{% endblock %}

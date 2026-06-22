@@ -1,0 +1,57 @@
+{% extends "base.html" %}
+{% block title %}仪表盘 - 钓鱼演练系统{% endblock %}
+{% block content %}
+<h1 style="margin-bottom:24px;">仪表盘</h1>
+
+<div class="stats">
+    <div class="stat-card">
+        <div class="number">{{ stats.total_targets }}</div>
+        <div class="label">目标总数</div>
+    </div>
+    <div class="stat-card">
+        <div class="number">{{ stats.total_collected }}</div>
+        <div class="label">已回传目标</div>
+    </div>
+    <div class="stat-card">
+        <div class="number">{{ stats.total_exes }}</div>
+        <div class="label">可生成EXE</div>
+    </div>
+</div>
+
+<div class="card">
+    <h2>最近回传记录</h2>
+    {% if collections %}
+    <table>
+        <thead>
+            <tr>
+                <th>目标姓名</th>
+                <th>邮箱</th>
+                <th>部门</th>
+                <th>IP地址</th>
+                <th>主机名</th>
+                <th>用户名</th>
+                <th>回传时间</th>
+            </tr>
+        </thead>
+        <tbody>
+            {% for c in collections %}
+            <tr>
+                <td><strong>{{ c.target_name }}</strong></td>
+                <td>{{ c.target_email }}</td>
+                <td>{{ c.target_department }}</td>
+                <td>{{ c.ip_address }}</td>
+                <td>{{ c.hostname }}</td>
+                <td>{{ c.username }}</td>
+                <td>{{ c.received_at }}</td>
+            </tr>
+            {% endfor %}
+        </tbody>
+    </table>
+    {% else %}
+    <div class="empty">
+        <div class="icon">📭</div>
+        <p>暂无回传数据</p>
+    </div>
+    {% endif %}
+</div>
+{% endblock %}

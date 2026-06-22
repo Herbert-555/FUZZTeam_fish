@@ -1,0 +1,108 @@
+{% extends "base.html" %}
+{% block title %}采集数据 - 钓鱼演练系统{% endblock %}
+{% block content %}
+<h1 style="margin-bottom:16px;">采集数据</h1>
+
+<div class="card">
+    <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:16px;">
+        <h2 style="margin:0;">全部回传记录 ({{ collections|length }})</h2>
+        <div>
+            <button class="btn btn-sm btn-danger" onclick="batchDelete()">批量删除</button>
+            <button class="btn btn-sm btn-primary" onclick="batchExport()">批量导出</button>
+        </div>
+    </div>
+
+    {% if collections %}
+    <form id="batch-form" method="POST">
+        <table>
+            <thead>
+                <tr>
+                    <th style="width:40px;">
+                        <input type="checkbox" onclick="document.querySelectorAll('.col-cb').forEach(cb=>cb.checked=this.checked)">
+                    </th>
+                    <th>目标姓名</th>
+                    <th>邮箱</th>
+                    <th>部门</th>
+                    <th>IP/MAC地址</th>
+                    <th>出口IP</th>
+                    <th>主机名</th>
+                    <th>用户名</th>
+                    <th>截屏</th>
+                    <th>文件</th>
+                    <th>回传时间</th>
+                    <th>操作</th>
+                </tr>
+            </thead>
+            <tbody>
+                {% for c in collections %}
+                <tr>
+                    <td>
+                        <input class="col-cb" type="checkbox" name="ids[]" value="{{ c.id }}" form="batch-form">
+                    </td>
+                    <td><strong>{{ c.target_name }}</strong></td>
+                    <td>{{ c.target_email }}</td>
+                    <td>{{ c.target_department }}</td>
+                    <td><span style="font-size:12px;">{{ c.ip_address | replace('\n', '<br>') | safe }}</span></td>
+                    <td><code style="font-size:12px;">{{ c.exit_ip or '-' }}</code></td>
+                    <td>{{ c.hostname }}</td>
+                    <td>{{ c.username }}</td>
+                    <td>
+                        {% if c.screenshot_path %}
+                        <a href="{{ url_for('routes_web.uploaded_file', filename=c.screenshot_path) }}" target="_blank">查看</a>
+                        {% else %}-{% endif %}
+                    </td>
+                    <td>
+                        <a href="{{ url_for('routes_web.target_detail', target_id=c.target_id) }}">查看文件</a>
+                    </td>
+                    <td>{{ c.received_at }}</td>
+                    <td>
+                        <form action="{{ url_for('routes_web.delete_single_collection', col_id=c.id) }}" method="POST" style="display:inline;" onsubmit="return confirm('确认删除该记录？');">
+                            <button class="btn btn-sm btn-danger">删除</button>
+                        </form>
+                    </td>
+                </tr>
+                {% endfor %}
+            </tbody>
+        </table>
+    </form>
+    {% else %}
+    <div class="empty">
+        <div class="icon">📭</div>
+        <p>暂无回传数据</p>
+    </div>
+    {% endif %}
+</div>
+
+<script>
+function getCheckedIds() {
+    var cbs = document.querySelectorAll('.col-cb:checked');
+    return Array.from(cbs).map(function(cb) { return cb.value; });
+}
+
+function batchDelete() {
+    var ids = getCheckedIds();
+    if (ids.length === 0) { alert('请先选择记录'); return; }
+    if (!confirm('确认删除选中的 ' + ids.length + ' 条记录？')) return;
+
+    var form = document.createElement('form');
+    form.method = 'POST';
+    form.action = '/fishfish/collections/batch_delete';
+    ids.forEach(function(id) {
+        var input = document.createElement('input');
+        input.type = 'hidden';
+        input.name = 'ids[]';
+        input.value = id;
+        form.appendChild(input);
+    });
+    document.body.appendChild(form);
+    form.submit();
+}
+
+function batchExport() {
+    var ids = getCheckedIds();
+    if (ids.length === 0) { alert('请先选择记录'); return; }
+    var params = ids.map(function(id) { return 'ids[]=' + id; }).join('&');
+    window.location.href = '/fishfish/collections/export?' + params;
+}
+</script>
+{% endblock %}

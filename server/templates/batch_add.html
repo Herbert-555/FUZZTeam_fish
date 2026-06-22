@@ -1,0 +1,21 @@
+{% extends "base.html" %}
+{% block title %}批量导入 - 钓鱼演练系统{% endblock %}
+{% block content %}
+<h1 style="margin-bottom:16px;">批量导入目标</h1>
+
+<div class="card">
+    <form method="POST">
+        <div class="form-group">
+            <label>目标数据</label>
+            <textarea name="batch_data" placeholder="每行一个目标，格式：姓名,邮箱,部门&#10;仅姓名必填，邮箱和部门可选&#10;例如：&#10;张三,zhangsan@company.com,技术部&#10;李四&#10;王五,wangwu@company.com"></textarea>
+        </div>
+        <div style="color:#888;font-size:13px;margin-bottom:12px;">
+            ⚠️ 每行一个目标，英文逗号分隔。仅姓名必填。系统将为每个目标自动分配唯一Token。
+        </div>
+        <div class="btn-group">
+            <button type="submit" class="btn btn-primary">批量导入</button>
+            <a href="{{ url_for('routes_web.targets') }}" class="btn" style="background:#eee;">返回</a>
+        </div>
+    </form>
+</div>
+{% endblock %}

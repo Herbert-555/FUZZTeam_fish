@@ -1,0 +1,31 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>{% block title %}钓鱼演练系统{% endblock %}</title>
+    <link rel="stylesheet" href="{{ url_for('static', filename='style.css') }}">
+</head>
+<body>
+<nav>
+    <span class="brand">🐟 FUZZTeam_fish</span>
+    <a href="{{ url_for('routes_web.index') }}" {% if request.endpoint == 'routes_web.index' %}class="active"{% endif %}>仪表盘</a>
+    <a href="{{ url_for('routes_web.targets') }}" {% if request.endpoint and request.endpoint.startswith('routes_web.targets') %}class="active"{% endif %}>目标管理</a>
+    <a href="{{ url_for('routes_web.exe_generate') }}" {% if request.endpoint and request.endpoint.startswith('routes_web.exe_generate') %}class="active"{% endif %}>EXE生成</a>
+    <a href="{{ url_for('routes_web.collections') }}" {% if request.endpoint == 'routes_web.collections' %}class="active"{% endif %}>采集数据</a>
+    <a href="{{ url_for('routes_web.exe_config') }}" {% if request.endpoint == 'routes_web.exe_config' %}class="active"{% endif %}>EXE配置</a>
+</nav>
+
+<div class="container">
+    {% with messages = get_flashed_messages(with_categories=true) %}
+    {% if messages %}
+    {% for category, msg in messages %}
+    <div class="flash-msg flash-{{ category }}">{{ msg }}</div>
+    {% endfor %}
+    {% endif %}
+    {% endwith %}
+
+    {% block content %}{% endblock %}
+</div>
+</body>
+</html>

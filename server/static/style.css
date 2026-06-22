@@ -1,0 +1,280 @@
+* {
+    margin: 0;
+    padding: 0;
+    box-sizing: border-box;
+}
+
+body {
+    font-family: 'Segoe UI', 'Microsoft YaHei', sans-serif;
+    background: #f0f2f5;
+    color: #333;
+    min-height: 100vh;
+}
+
+/* ---- Nav ---- */
+nav {
+    background: #1a1a2e;
+    color: #fff;
+    padding: 0 24px;
+    display: flex;
+    align-items: center;
+    height: 56px;
+    box-shadow: 0 2px 8px rgba(0,0,0,0.15);
+}
+nav .brand {
+    font-size: 18px;
+    font-weight: 700;
+    letter-spacing: 1px;
+}
+nav a {
+    color: #ccc;
+    text-decoration: none;
+    margin-left: 28px;
+    font-size: 14px;
+    transition: color 0.2s;
+}
+nav a:hover, nav a.active {
+    color: #fff;
+}
+
+/* ---- Container ---- */
+.container {
+    max-width: 1200px;
+    margin: 0 auto;
+    padding: 24px;
+}
+
+/* ---- Flash messages ---- */
+.flash-msg {
+    padding: 12px 16px;
+    border-radius: 6px;
+    margin-bottom: 16px;
+    font-size: 14px;
+}
+.flash-success {
+    background: #d4edda;
+    color: #155724;
+    border: 1px solid #c3e6cb;
+}
+.flash-error {
+    background: #f8d7da;
+    color: #721c24;
+    border: 1px solid #f5c6cb;
+}
+
+/* ---- Cards ---- */
+.card {
+    background: #fff;
+    border-radius: 8px;
+    box-shadow: 0 1px 4px rgba(0,0,0,0.08);
+    padding: 24px;
+    margin-bottom: 20px;
+}
+.card h2 {
+    font-size: 20px;
+    margin-bottom: 16px;
+    color: #1a1a2e;
+}
+
+/* ---- Stats ---- */
+.stats {
+    display: grid;
+    grid-template-columns: repeat(auto-fit, minmax(200px, 1fr));
+    gap: 16px;
+    margin-bottom: 24px;
+}
+.stat-card {
+    background: #fff;
+    border-radius: 8px;
+    padding: 20px;
+    box-shadow: 0 1px 4px rgba(0,0,0,0.08);
+    text-align: center;
+}
+.stat-card .number {
+    font-size: 36px;
+    font-weight: 700;
+    color: #1a1a2e;
+}
+.stat-card .label {
+    font-size: 13px;
+    color: #888;
+    margin-top: 4px;
+}
+
+/* ---- Tables ---- */
+table {
+    width: 100%;
+    border-collapse: collapse;
+    font-size: 14px;
+}
+th {
+    text-align: left;
+    padding: 12px;
+    background: #f8f9fa;
+    border-bottom: 2px solid #dee2e6;
+    font-weight: 600;
+    color: #555;
+}
+td {
+    padding: 10px 12px;
+    border-bottom: 1px solid #eee;
+}
+tr:hover {
+    background: #f8f9fa;
+}
+
+/* ---- Buttons ---- */
+.btn {
+    display: inline-block;
+    padding: 8px 18px;
+    font-size: 14px;
+    border: none;
+    border-radius: 6px;
+    cursor: pointer;
+    text-decoration: none;
+    transition: background 0.2s;
+    font-weight: 500;
+}
+.btn-primary {
+    background: #4361ee;
+    color: #fff;
+}
+.btn-primary:hover {
+    background: #3a56d4;
+}
+.btn-danger {
+    background: #e63946;
+    color: #fff;
+}
+.btn-danger:hover {
+    background: #c1121f;
+}
+.btn-success {
+    background: #2a9d8f;
+    color: #fff;
+}
+.btn-success:hover {
+    background: #21867a;
+}
+.btn-sm {
+    padding: 4px 12px;
+    font-size: 12px;
+}
+.btn-group {
+    margin-top: 16px;
+    display: flex;
+    gap: 8px;
+}
+
+/* ---- Forms ---- */
+.form-group {
+    margin-bottom: 16px;
+}
+.form-group label {
+    display: block;
+    margin-bottom: 6px;
+    font-weight: 600;
+    font-size: 14px;
+    color: #555;
+}
+.form-group input, .form-group textarea, .form-group select {
+    width: 100%;
+    padding: 10px 12px;
+    border: 1px solid #ddd;
+    border-radius: 6px;
+    font-size: 14px;
+    font-family: inherit;
+    transition: border 0.2s;
+}
+.form-group input:focus, .form-group textarea:focus {
+    outline: none;
+    border-color: #4361ee;
+    box-shadow: 0 0 0 3px rgba(67, 97, 238, 0.15);
+}
+.form-group textarea {
+    min-height: 200px;
+    font-family: 'Consolas', 'Courier New', monospace;
+    font-size: 13px;
+}
+
+/* ---- Badges ---- */
+.badge {
+    display: inline-block;
+    padding: 2px 10px;
+    border-radius: 12px;
+    font-size: 12px;
+    font-weight: 600;
+}
+.badge-yes {
+    background: #d4edda;
+    color: #155724;
+}
+.badge-no {
+    background: #f0f0f0;
+    color: #888;
+}
+.badge-success {
+    background: #d4edda;
+    color: #155724;
+}
+.badge-danger {
+    background: #f8d7da;
+    color: #721c24;
+}
+
+/* ---- Detail sections ---- */
+.detail-grid {
+    display: grid;
+    grid-template-columns: repeat(auto-fill, minmax(280px, 1fr));
+    gap: 12px;
+    margin-bottom: 16px;
+}
+.detail-item {
+    background: #f8f9fa;
+    padding: 12px;
+    border-radius: 6px;
+}
+.detail-item .key {
+    font-size: 12px;
+    color: #888;
+    text-transform: uppercase;
+    letter-spacing: 0.5px;
+}
+.detail-item .val {
+    font-size: 15px;
+    margin-top: 4px;
+    word-break: break-all;
+}
+
+/* ---- Screenshot ---- */
+.screenshot-img {
+    max-width: 100%;
+    border-radius: 6px;
+    box-shadow: 0 2px 8px rgba(0,0,0,0.1);
+    cursor: pointer;
+}
+
+/* ---- Directory tree ---- */
+.dir-tree {
+    font-family: 'Consolas', 'Courier New', monospace;
+    font-size: 13px;
+    background: #1a1a2e;
+    color: #a8d8a8;
+    padding: 16px;
+    border-radius: 6px;
+    max-height: 500px;
+    overflow-y: auto;
+    white-space: pre-wrap;
+    word-break: break-all;
+}
+
+/* ---- Empty state ---- */
+.empty {
+    text-align: center;
+    padding: 48px;
+    color: #999;
+}
+.empty .icon {
+    font-size: 48px;
+    margin-bottom: 12px;
+}
