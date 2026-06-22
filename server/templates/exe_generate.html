@@ -3,6 +3,13 @@
 {% block content %}
 <h1 style="margin-bottom:16px;">EXE生成</h1>
 
+{% if not server_configured %}
+<div style="background:#fff3cd;border:1px solid #ffc107;border-radius:8px;padding:12px 16px;margin-bottom:16px;display:flex;align-items:center;gap:10px;">
+    <span style="font-size:20px;">⚠️</span>
+    <span>尚未配置目标可达的服务器 IP，请先前往 <a href="{{ url_for('routes_web.exe_config') }}" style="font-weight:bold;color:#e76f51;">EXE 配置</a> 页面设置回传地址，否则生成的 EXE 将无法回传数据。</span>
+</div>
+{% endif %}
+
 <div class="card" style="margin-bottom:20px;">
     <h2>基础 EXE</h2>
     <p style="color:#888;font-size:13px;margin-bottom:12px;">

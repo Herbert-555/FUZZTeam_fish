@@ -3,10 +3,17 @@
 {% block content %}
 <h1 style="margin-bottom:16px;">目标管理</h1>
 
+{% if not server_configured %}
+<div style="background:#fff3cd;border:1px solid #ffc107;border-radius:8px;padding:12px 16px;margin-bottom:16px;display:flex;align-items:center;gap:10px;">
+    <span style="font-size:20px;">⚠️</span>
+    <span>尚未配置目标可达的服务器 IP，请先前往 <a href="{{ url_for('routes_web.exe_config') }}" style="font-weight:bold;color:#e76f51;">EXE 配置</a> 页面设置回传地址，否则生成的 EXE 将无法回传数据。</span>
+</div>
+{% endif %}
+
 <div class="btn-group" style="margin-bottom:20px;">
     <a href="{{ url_for('routes_web.add_target_view') }}" class="btn btn-primary">+ 添加目标</a>
     <a href="{{ url_for('routes_web.batch_add_targets') }}" class="btn btn-success">批量导入</a>
-    <button class="btn" style="background:#e9c46a;" onclick="batchBuild()">批量生成EXE</button>
+    <button class="btn" style="background:#e9c46a;" onclick="batchBuild()" {% if not server_configured %}disabled title="请先在 EXE 配置页面设置服务器 IP"{% endif %}>批量生成EXE</button>
     <button class="btn btn-danger" onclick="batchDelete()">批量删除目标</button>
     <form action="{{ url_for('routes_web.delete_all_exe') }}" method="POST" style="display:inline;" onsubmit="return confirm('确认删除所有已生成的EXE文件？');">
         <button class="btn btn-danger">清除所有EXE</button>
@@ -53,7 +60,7 @@
                 <td>{{ t.created_at }}</td>
                 <td>
                     <a href="{{ url_for('routes_web.target_detail', target_id=t.id) }}" class="btn btn-sm btn-primary">详情</a>
-                    <button id="btn-gen-{{ t.id }}" class="btn btn-sm btn-success" onclick="buildExe({{ t.id }})">
+                    <button id="btn-gen-{{ t.id }}" class="btn btn-sm btn-success" onclick="buildExe({{ t.id }})" {% if not server_configured %}disabled title="请先在 EXE 配置页面设置服务器 IP"{% endif %}>
                         {% if t.exe_exists %}重新生成{% else %}生成EXE{% endif %}
                     </button>
                     <span id="exe-actions-{{ t.id }}" {% if not t.exe_exists %}style="display:none;"{% endif %}>
@@ -106,6 +113,7 @@ function batchDelete() {
 }
 
 function batchBuild() {
+    {% if not server_configured %}alert('请先在 EXE 配置页面设置服务器 IP'); return;{% endif %}
     var ids = getCheckedIds();
     if (ids.length === 0) { alert('请先选择目标'); return; }
 
@@ -135,6 +143,7 @@ function batchBuild() {
 }
 
 function buildExe(targetId) {
+    {% if not server_configured %}alert('请先在 EXE 配置页面设置服务器 IP'); return;{% endif %}
     var genBtn = document.getElementById('btn-gen-' + targetId);
     genBtn.disabled = true;
     genBtn.textContent = '打包中...';

@@ -12,14 +12,11 @@ def _ensure_dirs():
         os.makedirs(os.path.join(BASE_DIR, d), exist_ok=True)
 
 
-def create_manage_app(listen_host='127.0.0.1', listen_port=8080, admin_path=''):
+def create_manage_app(admin_path=''):
     """Create the management web UI Flask app."""
     app = Flask(__name__)
     app.secret_key = 'fuzzteam_fish_secret_2026'
 
-    # Store listen address and admin path in config
-    app.config['LISTEN_HOST'] = listen_host
-    app.config['LISTEN_PORT'] = listen_port
     app.config['ADMIN_PATH'] = admin_path
 
     _ensure_dirs()

@@ -79,7 +79,8 @@ def targets():
     all_targets = get_all_targets()
     for t in all_targets:
         t['exe_exists'] = _exe_exists(t['name'], t['unique_token'])
-    return render_template('targets.html', targets=all_targets)
+    server_configured = _check_server_configured()
+    return render_template('targets.html', targets=all_targets, server_configured=server_configured)
 
 
 @routes_web.route('/targets/add', methods=['GET', 'POST'])
@@ -163,9 +164,30 @@ def delete_target(target_id):
     return redirect(url_for('routes_web.targets'))
 
 
+def _check_server_configured():
+    """Return True if server_host is configured (not default 127.0.0.1)."""
+    from .config_manager import load_config
+    config = load_config()
+    host = config.get('server_host', '127.0.0.1').strip()
+    if host in ('127.0.0.1', 'localhost', '::1', ''):
+        return False
+    return True
+
+
+def _require_server_configured():
+    """Like _check_server_configured but also flashes a message for redirect routes."""
+    if not _check_server_configured():
+        flash('请先在 EXE 配置页面设置目标可达的服务器 IP', 'error')
+        return False
+    return True
+
+
 @routes_web.route('/targets/<int:target_id>/build_exe', methods=['POST'])
 @login_required
 def build_exe_from_target(target_id):
+    if not _require_server_configured():
+        return jsonify({'status': 'error', 'message': '请先在 EXE 配置页面设置服务器 IP'}), 400
+
     from .exe_builder import build_exe_async
 
     target = get_target_by_id(target_id)
@@ -256,6 +278,9 @@ def batch_delete_targets():
 @routes_web.route('/targets/batch_build_exe', methods=['POST'])
 @login_required
 def batch_build_exe_targets():
+    if not _require_server_configured():
+        return jsonify({'status': 'error', 'message': '请先在 EXE 配置页面设置服务器 IP'}), 400
+
     from .exe_builder import build_exe_async
     ids = request.form.getlist('ids[]')
     listen_url = _get_listen_url()
@@ -272,9 +297,11 @@ def batch_build_exe_targets():
 
 
 def _get_listen_url():
-    """Get the listen URL from app config for embedding in EXEs."""
-    host = current_app.config.get('LISTEN_HOST', '127.0.0.1')
-    port = current_app.config.get('LISTEN_PORT', 8080)
+    """Get the listen URL from EXE config for embedding in EXEs."""
+    from .config_manager import load_config
+    config = load_config()
+    host = config.get('server_host', '127.0.0.1')
+    port = config.get('server_port', 8080)
     return f'http://{host}:{port}'
 
 
@@ -303,13 +330,17 @@ def exe_generate():
             reverse=True
         )
     has_base_exe = os.path.exists(BASE_EXE_PATH)
+    server_configured = _check_server_configured()
     return render_template('exe_generate.html', targets=all_targets, files=files,
-                           has_base_exe=has_base_exe)
+                           has_base_exe=has_base_exe, server_configured=server_configured)
 
 
 @routes_web.route('/exe/generate/<int:target_id>', methods=['POST'])
 @login_required
 def build_single_exe(target_id):
+    if not _require_server_configured():
+        return redirect(url_for('routes_web.exe_config'))
+
     from .exe_builder import build_exe
 
     target = get_target_by_id(target_id)
@@ -331,6 +362,9 @@ def build_single_exe(target_id):
 @routes_web.route('/exe/generate/batch', methods=['POST'])
 @login_required
 def build_batch_exes():
+    if not _require_server_configured():
+        return redirect(url_for('routes_web.exe_config'))
+
     from .exe_builder import build_exes_batch
 
     target_ids = request.form.getlist('target_ids')
@@ -496,6 +530,18 @@ def exe_config():
                 config['popup_message'] = request.form.get('popup_message', '').strip()
             save_config(config)
             flash('行为设置已保存', 'success')
+
+        # Handle server config (separate form)
+        if request.form.get('save_server'):
+            config = load_config()
+            host = request.form.get('server_host', '').strip()
+            port_str = request.form.get('server_port', '8080').strip()
+            if host:
+                config['server_host'] = host
+            if port_str.isdigit():
+                config['server_port'] = int(port_str)
+            save_config(config)
+            flash('服务端配置已保存', 'success')
 
         return redirect(url_for('routes_web.exe_config'))
 

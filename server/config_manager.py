@@ -12,6 +12,8 @@ DEFAULT_CONFIG = {
     'self_destruct': False,
     'popup_enabled': True,
     'popup_message': '系统不兼容，运行失败!',
+    'server_host': '127.0.0.1',
+    'server_port': 8080,
 }
 
 
