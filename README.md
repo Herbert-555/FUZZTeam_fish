@@ -36,20 +36,34 @@ FUZZTEAM_FISH_MANAGE_PORT=8000 FUZZTEAM_FISH_LISTEN_PORT=9000 bash install_fish.
 docker logs fuzzteam-fish
 ```
 
+![image-20260622175207176](README.assets/image-20260622175207176.png)
+
+执行`docker logs fuzzteam-fish`获取访问地址
+
+![image-20260622175315820](README.assets/image-20260622175315820.png)
+
+访问vps的`http://<ip>:5000/66f28747a6/`，就能访问管理端
+
+![image-20260622175458984](README.assets/image-20260622175458984.png)
+
 ### 环境变量
 
-| 变量 | 默认值 | 说明 |
-|------|--------|------|
-| `FUZZTEAM_FISH_CONTAINER` | `fuzzteam-fish` | 容器名称 |
-| `FUZZTEAM_FISH_IMAGE` | `fuzzteam-fish` | 镜像名称 |
-| `FUZZTEAM_FISH_MANAGE_PORT` | `5000` | 管理面板端口 |
-| `FUZZTEAM_FISH_LISTEN_PORT` | `8080` | EXE 回传数据端口 |
-| `FUZZTEAM_FISH_DATA` | `./data` | 数据库持久化目录 |
-| `FUZZTEAM_FISH_UPLOADS` | `./uploads` | 截图上传目录 |
-| `FUZZTEAM_FISH_OUTPUT` | `./output` | EXE 输出目录 |
-| `PIP_INDEX_URL` | 空 | pip 镜像源地址 |
+| 变量                        | 默认值          | 说明             |
+| --------------------------- | --------------- | ---------------- |
+| `FUZZTEAM_FISH_CONTAINER`   | `fuzzteam-fish` | 容器名称         |
+| `FUZZTEAM_FISH_IMAGE`       | `fuzzteam-fish` | 镜像名称         |
+| `FUZZTEAM_FISH_MANAGE_PORT` | `5000`          | 管理面板端口     |
+| `FUZZTEAM_FISH_LISTEN_PORT` | `8080`          | EXE 回传数据端口 |
+| `FUZZTEAM_FISH_DATA`        | `./data`        | 数据库持久化目录 |
+| `FUZZTEAM_FISH_UPLOADS`     | `./uploads`     | 截图上传目录     |
+| `FUZZTEAM_FISH_OUTPUT`      | `./output`      | EXE 输出目录     |
+| `PIP_INDEX_URL`             | 空              | pip 镜像源地址   |
 
-## 使用流程
+
+
+## 系统使用
+
+### 使用流程
 
 1. 登录管理面板
 2. 在「目标管理」中添加/批量导入目标
@@ -57,6 +71,44 @@ docker logs fuzzteam-fish
 4. 在「EXE 生成」中为基础 EXE 注入配置生成目标 EXE
 5. 将生成的 EXE 分发给目标（通过邮件、U盘等）
 6. 目标运行 EXE 后，在「采集数据」中查看回传的主机信息、截图、目录结构
+
+使用`fish/fishfish@123`登录系统，到 **exe配置** 界面配置VPS的IP
+
+![image-20260622181218466](README.assets/image-20260622181218466.png)
+
+目标管理处添加目标
+
+![image-20260622175749202](README.assets/image-20260622175749202.png)
+
+![image-20260622175811706](README.assets/image-20260622175811706.png)
+
+![image-20260622175822268](README.assets/image-20260622175822268.png)
+
+点击生成exe
+
+![image-20260622175838059](README.assets/image-20260622175838059.png)
+
+生成后下载
+
+![image-20260622175901320](README.assets/image-20260622175901320.png)
+
+下载完成后放到目标机器进行执行
+
+![image-20260622180049941](README.assets/image-20260622180049941.png)
+
+![image-20260622180106015](README.assets/image-20260622180106015.png)
+
+如果目标出网就可以获取回传信息
+
+![image-20260622180241595](README.assets/image-20260622180241595.png)
+
+![image-20260622180220051](README.assets/image-20260622180220051.png)
+
+自动获取目标桌面、c盘、d盘文件名称大小信息
+
+![image-20260622180327750](README.assets/image-20260622180327750.png)
+
+
 
 ## 架构
 
