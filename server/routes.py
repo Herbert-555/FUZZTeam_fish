@@ -158,6 +158,48 @@ def _parse_targets_xlsx(file_storage):
     return entries
 
 
+@routes_web.route('/targets/import_template')
+@login_required
+def download_import_template():
+    import csv
+    import io as io_mod
+    from flask import Response
+
+    headers = ['姓名', '邮箱', '部门', 'EXE文件名']
+    rows = [
+        ['张三', 'zhangsan@example.com', '技术部', '张三方案'],
+        ['李四', 'lisi@example.com', '财务部', ''],
+    ]
+    file_type = request.args.get('type', 'xlsx').lower()
+
+    if file_type == 'csv':
+        output = io_mod.StringIO()
+        writer = csv.writer(output)
+        writer.writerow(headers)
+        writer.writerows(rows)
+        return Response(
+            output.getvalue().encode('utf-8-sig'),
+            mimetype='text/csv',
+            headers={'Content-Disposition': 'attachment; filename=targets_import_template.csv'}
+        )
+
+    from openpyxl import Workbook
+    output = io_mod.BytesIO()
+    wb = Workbook()
+    ws = wb.active
+    ws.title = 'targets'
+    ws.append(headers)
+    for row in rows:
+        ws.append(row)
+    wb.save(output)
+    output.seek(0)
+    return Response(
+        output.getvalue(),
+        mimetype='application/vnd.openxmlformats-officedocument.spreadsheetml.sheet',
+        headers={'Content-Disposition': 'attachment; filename=targets_import_template.xlsx'}
+    )
+
+
 @routes_web.route('/targets/batch', methods=['GET', 'POST'])
 @login_required
 def batch_add_targets():

@@ -3,6 +3,11 @@
 {% block content %}
 <h1 style="margin-bottom:16px;">批量导入目标</h1>
 
+<div class="btn-group" style="margin-bottom:16px;">
+    <a href="{{ url_for('routes_web.download_import_template', type='xlsx') }}" class="btn btn-primary">下载Excel模板</a>
+    <a href="{{ url_for('routes_web.download_import_template', type='csv') }}" class="btn" style="background:#e9c46a;">下载CSV模板</a>
+</div>
+
 <div class="card">
     <form method="POST" enctype="multipart/form-data">
         <div class="form-group">
