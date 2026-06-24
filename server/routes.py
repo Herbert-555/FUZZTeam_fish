@@ -132,10 +132,20 @@ def _parse_targets_text(text):
     return entries
 
 
+def _decode_csv_upload(file_storage):
+    raw = file_storage.read()
+    for encoding in ('utf-8-sig', 'utf-8', 'gb18030', 'gbk', 'cp936'):
+        try:
+            return raw.decode(encoding)
+        except UnicodeDecodeError:
+            continue
+    return raw.decode('utf-8', errors='replace')
+
+
 def _parse_targets_csv(file_storage):
     import csv
     import io as io_mod
-    data = file_storage.read().decode('utf-8-sig')
+    data = _decode_csv_upload(file_storage)
     entries = []
     reader = csv.reader(io_mod.StringIO(data))
     for parts in reader:
@@ -542,6 +552,17 @@ def batch_delete_collections():
     return redirect(url_for('routes_web.collections'))
 
 
+def _csv_cell(value, max_len=30000):
+    if value is None:
+        return ''
+    value = str(value)
+    value = value.replace('\r\n', ' ').replace('\r', ' ').replace('\n', ' ').replace('\t', ' ')
+    value = ' '.join(value.split())
+    if len(value) > max_len:
+        return value[:max_len] + f'...（已截断，原始长度 {len(value)}）'
+    return value
+
+
 @routes_web.route('/collections/export')
 @login_required
 def export_collections():
@@ -561,10 +582,12 @@ def export_collections():
                       'MAC地址原始数据', '主机名', '用户名', '截屏文件', '目录信息', '回传时间'])
     for r in rows:
         writer.writerow([
-            r['id'], r.get('target_name', ''), r.get('target_email', ''),
-            r.get('target_department', ''), r['ip_address'], r.get('exit_ip', ''),
-            r['mac_address'], r['hostname'], r['username'], r['screenshot_path'],
-            r['directory_info'], r['received_at'],
+            _csv_cell(r['id']), _csv_cell(r.get('target_name', '')),
+            _csv_cell(r.get('target_email', '')), _csv_cell(r.get('target_department', '')),
+            _csv_cell(r['ip_address']), _csv_cell(r.get('exit_ip', '')),
+            _csv_cell(r['mac_address']), _csv_cell(r['hostname']),
+            _csv_cell(r['username']), _csv_cell(r['screenshot_path']),
+            _csv_cell(r['directory_info']), _csv_cell(r['received_at']),
         ])
 
     output.seek(0)
