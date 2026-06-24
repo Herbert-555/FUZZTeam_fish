@@ -17,6 +17,10 @@
             <label>部门</label>
             <input type="text" name="department" placeholder="如：技术部">
         </div>
+        <div class="form-group">
+            <label>EXE文件名</label>
+            <input type="text" name="exe_filename" placeholder="为空时使用统一名称模板，不需要填写 .exe">
+        </div>
         <div class="btn-group">
             <button type="submit" class="btn btn-primary">添加</button>
             <a href="{{ url_for('routes_web.targets') }}" class="btn" style="background:#eee;">取消</a>

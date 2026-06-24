@@ -63,8 +63,24 @@ def save_icon(file_storage):
     return filepath
 
 
+def sanitize_exe_name(name):
+    name = (name or '').strip()
+    if name.lower().endswith(BIN_EXT):
+        name = name[:-len(BIN_EXT)]
+    safe_name = "".join(c if c.isalnum() or c in '._- ' else '_' for c in name)
+    safe_name = safe_name.strip(' ._')
+    return safe_name
+
+
 def build_filename(target_name, token):
     template = get_name_template()
-    safe_name = "".join(c if c.isalnum() or c in '._- ' else '_' for c in target_name)
+    safe_name = sanitize_exe_name(target_name) or 'target'
     return template.replace('{name}', safe_name).replace('{token}', token).replace('{token8}', token[:8])
+
+
+def resolve_exe_name(target_name, token, custom_filename=''):
+    custom = sanitize_exe_name(custom_filename)
+    if custom:
+        return custom
+    return build_filename(target_name, token)
 

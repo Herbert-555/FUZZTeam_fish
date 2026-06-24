@@ -37,6 +37,7 @@ def init_db():
             name TEXT NOT NULL,
             email TEXT DEFAULT '',
             department TEXT DEFAULT '',
+            exe_filename TEXT DEFAULT '',
             unique_token TEXT UNIQUE NOT NULL,
             created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
         );
@@ -56,20 +57,25 @@ def init_db():
         );
     ''')
     conn.commit()
-    # Add exit_ip column for existing databases
+    # Add columns for existing databases
     try:
         conn.execute('ALTER TABLE collections ADD COLUMN exit_ip TEXT DEFAULT ""')
     except sqlite3.OperationalError:
         pass  # column already exists
+    try:
+        conn.execute('ALTER TABLE targets ADD COLUMN exe_filename TEXT DEFAULT ""')
+    except sqlite3.OperationalError:
+        pass  # column already exists
+    conn.commit()
     conn.close()
 
 
-def add_target(name, email, department=''):
+def add_target(name, email, department='', exe_filename=''):
     conn = get_db()
     token = str(uuid.uuid4())
     conn.execute(
-        'INSERT INTO targets (name, email, department, unique_token) VALUES (?, ?, ?, ?)',
-        (name, email, department, token)
+        'INSERT INTO targets (name, email, department, exe_filename, unique_token) VALUES (?, ?, ?, ?, ?)',
+        (name, email, department, exe_filename, token)
     )
     conn.commit()
     target_id = conn.execute('SELECT last_insert_rowid()').fetchone()[0]
@@ -78,14 +84,18 @@ def add_target(name, email, department=''):
 
 
 def add_targets_batch(entries):
-    """entries: list of (name, email, department)"""
+    """entries: list of (name, email, department, exe_filename)"""
     conn = get_db()
     results = []
-    for name, email, department in entries:
+    for entry in entries:
+        name = entry[0]
+        email = entry[1] if len(entry) > 1 else ''
+        department = entry[2] if len(entry) > 2 else ''
+        exe_filename = entry[3] if len(entry) > 3 else ''
         token = str(uuid.uuid4())
         conn.execute(
-            'INSERT INTO targets (name, email, department, unique_token) VALUES (?, ?, ?, ?)',
-            (name, email, department, token)
+            'INSERT INTO targets (name, email, department, exe_filename, unique_token) VALUES (?, ?, ?, ?, ?)',
+            (name, email, department, exe_filename, token)
         )
         target_id = conn.execute('SELECT last_insert_rowid()').fetchone()[0]
         results.append({'id': target_id, 'name': name, 'email': email, 'token': token})

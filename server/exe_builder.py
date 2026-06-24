@@ -82,12 +82,12 @@ def get_all_build_status():
         return dict(_build_status)
 
 
-def build_exe(server_url, token, target_name):
+def build_exe(server_url, token, target_name, exe_filename=''):
     """Build a target-specific EXE. Uses fast footer injection if base EXE
     exists; falls back to full PyInstaller build."""
-    from .config_manager import build_filename, load_config
+    from .config_manager import load_config, resolve_exe_name
     config = load_config()
-    exe_name = build_filename(target_name, token)
+    exe_name = resolve_exe_name(target_name, token, exe_filename)
 
     if os.path.exists(BASE_EXE_PATH):
         return _build_with_footer(server_url, token, config, exe_name)
@@ -200,14 +200,14 @@ def _build_with_pyinstaller(server_url, token, target_name, config, exe_name):
     return exe_path
 
 
-def build_exe_async(server_url, token, target_name, target_id):
+def build_exe_async(server_url, token, target_name, target_id, exe_filename=''):
     """Start an async build, returns immediately. Status tracked in _build_status."""
     with _lock:
         _build_status[target_id] = {'status': 'building', 'message': '正在打包...'}
 
     def _run():
         try:
-            build_exe(server_url, token, target_name)
+            build_exe(server_url, token, target_name, exe_filename)
             with _lock:
                 _build_status[target_id] = {'status': 'done', 'message': '生成完毕'}
         except Exception as e:
@@ -222,7 +222,7 @@ def build_exes_batch(server_url, targets):
     results = []
     for t in targets:
         try:
-            exe_path = build_exe(server_url, t['token'], t['name'])
+            exe_path = build_exe(server_url, t['token'], t['name'], t.get('exe_filename', ''))
             results.append({
                 'target_id': t['id'],
                 'name': t['name'],

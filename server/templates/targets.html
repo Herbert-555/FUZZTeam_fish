@@ -32,6 +32,7 @@
                 <th>姓名</th>
                 <th>邮箱</th>
                 <th>部门</th>
+                <th>EXE文件名</th>
                 <th>Token</th>
                 <th>是否上线</th>
                 <th>点击次数</th>
@@ -48,6 +49,7 @@
                 <td><strong>{{ t.name }}</strong></td>
                 <td>{{ t.email or '-' }}</td>
                 <td>{{ t.department or '-' }}</td>
+                <td>{{ t.exe_filename or '使用模板' }}</td>
                 <td><code style="font-size:12px;">{{ t.unique_token[:8] }}...</code></td>
                 <td>
                     {% if t.callback_count %}

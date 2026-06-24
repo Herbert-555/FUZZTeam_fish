@@ -63,9 +63,9 @@ def index():
 
 # ---- Target Management ----
 
-def _exe_filename(target_name, token):
-    from .config_manager import build_filename, BIN_EXT
-    return build_filename(target_name, token) + BIN_EXT
+def _exe_filename(target_name, token, exe_filename=''):
+    from .config_manager import BIN_EXT, resolve_exe_name
+    return resolve_exe_name(target_name, token, exe_filename) + BIN_EXT
 
 
 def _exe_exists(target_name, token):
@@ -90,42 +90,100 @@ def add_target_view():
         name = request.form.get('name', '').strip()
         email = request.form.get('email', '').strip()
         department = request.form.get('department', '').strip()
+        exe_filename = request.form.get('exe_filename', '').strip()
 
         if not name:
             flash('名称为必填项', 'error')
             return redirect(url_for('routes_web.add_target_view'))
 
-        target_id, token = add_target(name, email, department)
+        target_id, token = add_target(name, email, department, exe_filename)
         flash(f'目标已添加 (Token: {token[:8]}...)', 'success')
         return redirect(url_for('routes_web.targets'))
 
     return render_template('add_target.html')
 
 
+def _is_target_header(parts):
+    if not parts:
+        return False
+    return parts[0].strip().lower() in ('姓名', '名称', '目标姓名', 'name', 'target')
+
+
+def _target_entry_from_parts(parts):
+    parts = [(str(p).strip() if p is not None else '') for p in parts]
+    if not parts or not parts[0] or _is_target_header(parts):
+        return None
+    name = parts[0]
+    email = parts[1] if len(parts) > 1 else ''
+    dept = parts[2] if len(parts) > 2 else ''
+    exe_filename = parts[3] if len(parts) > 3 else ''
+    return (name, email, dept, exe_filename)
+
+
+def _parse_targets_text(text):
+    import csv
+    import io as io_mod
+    entries = []
+    reader = csv.reader(io_mod.StringIO(text))
+    for parts in reader:
+        entry = _target_entry_from_parts(parts)
+        if entry:
+            entries.append(entry)
+    return entries
+
+
+def _parse_targets_csv(file_storage):
+    import csv
+    import io as io_mod
+    data = file_storage.read().decode('utf-8-sig')
+    entries = []
+    reader = csv.reader(io_mod.StringIO(data))
+    for parts in reader:
+        entry = _target_entry_from_parts(parts)
+        if entry:
+            entries.append(entry)
+    return entries
+
+
+def _parse_targets_xlsx(file_storage):
+    from openpyxl import load_workbook
+    wb = load_workbook(file_storage, read_only=True, data_only=True)
+    ws = wb.active
+    entries = []
+    for row in ws.iter_rows(values_only=True):
+        entry = _target_entry_from_parts(row)
+        if entry:
+            entries.append(entry)
+    wb.close()
+    return entries
+
+
 @routes_web.route('/targets/batch', methods=['GET', 'POST'])
 @login_required
 def batch_add_targets():
     if request.method == 'POST':
-        text = request.form.get('batch_data', '').strip()
-        if not text:
-            flash('请输入目标数据', 'error')
-            return redirect(url_for('routes_web.batch_add_targets'))
-
         entries = []
-        for line in text.split('\n'):
-            line = line.strip()
-            if not line:
-                continue
-            parts = [p.strip() for p in line.split(',')]
-            if not parts or not parts[0]:
-                continue
-            name = parts[0]
-            email = parts[1] if len(parts) > 1 else ''
-            dept = parts[2] if len(parts) > 2 else ''
-            entries.append((name, email, dept))
+        text = request.form.get('batch_data', '').strip()
+        if text:
+            entries.extend(_parse_targets_text(text))
+
+        upload = request.files.get('target_file')
+        if upload and upload.filename:
+            filename = upload.filename.lower()
+            try:
+                if filename.endswith('.csv'):
+                    entries.extend(_parse_targets_csv(upload))
+                elif filename.endswith('.xlsx'):
+                    entries.extend(_parse_targets_xlsx(upload))
+                else:
+                    flash('仅支持 CSV 或 xlsx 文件导入', 'error')
+                    return redirect(url_for('routes_web.batch_add_targets'))
+            except Exception as e:
+                flash(f'文件解析失败: {e}', 'error')
+                return redirect(url_for('routes_web.batch_add_targets'))
 
         if not entries:
-            flash('未能解析任何有效数据，请检查格式 (姓名,邮箱,部门)', 'error')
+            flash('未能解析任何有效数据，请检查格式 (姓名,邮箱,部门,EXE文件名)', 'error')
             return redirect(url_for('routes_web.batch_add_targets'))
 
         add_targets_batch(entries)
@@ -195,7 +253,10 @@ def build_exe_from_target(target_id):
         return jsonify({'status': 'error', 'message': '目标不存在'}), 404
 
     listen_url = _get_listen_url()
-    build_exe_async(listen_url, target['unique_token'], target['name'], target_id)
+    build_exe_async(
+        listen_url, target['unique_token'], target['name'], target_id,
+        target.get('exe_filename', '')
+    )
     return jsonify({'status': 'ok', 'message': '开始生成'})
 
 
@@ -214,7 +275,7 @@ def download_exe_from_target(target_id):
         flash('目标不存在', 'error')
         return redirect(url_for('routes_web.targets'))
 
-    filename = _exe_filename(target['name'], target['unique_token'])
+    filename = _exe_filename(target['name'], target['unique_token'], target.get('exe_filename', ''))
     from .exe_builder import OUTPUT_DIR
     filepath = os.path.join(OUTPUT_DIR, filename)
     if not os.path.exists(filepath):
@@ -232,7 +293,7 @@ def delete_exe_from_target(target_id):
         flash('目标不存在', 'error')
         return redirect(url_for('routes_web.targets'))
 
-    filename = _exe_filename(target['name'], target['unique_token'])
+    filename = _exe_filename(target['name'], target['unique_token'], target.get('exe_filename', ''))
     from .exe_builder import OUTPUT_DIR, unregister_exe
     filepath = os.path.join(OUTPUT_DIR, filename)
     if os.path.exists(filepath):
@@ -288,7 +349,10 @@ def batch_build_exe_targets():
     for tid in ids:
         target = get_target_by_id(int(tid))
         if target:
-            build_exe_async(listen_url, target['unique_token'], target['name'], target['id'])
+            build_exe_async(
+                listen_url, target['unique_token'], target['name'], target['id'],
+                target.get('exe_filename', '')
+            )
             count += 1
     return jsonify({'status': 'ok', 'message': f'已开始生成 {count} 个EXE'})
 
@@ -351,7 +415,10 @@ def build_single_exe(target_id):
     listen_url = _get_listen_url()
 
     try:
-        exe_path = build_exe(listen_url, target['unique_token'], target['name'])
+        exe_path = build_exe(
+            listen_url, target['unique_token'], target['name'],
+            target.get('exe_filename', '')
+        )
         flash(f'EXE生成成功: {os.path.basename(exe_path)}', 'success')
     except Exception as e:
         flash(f'EXE生成失败: {e}', 'error')
@@ -380,6 +447,7 @@ def build_batch_exes():
                 'id': t['id'],
                 'name': t['name'],
                 'token': t['unique_token'],
+                'exe_filename': t.get('exe_filename', ''),
             })
 
     listen_url = _get_listen_url()
