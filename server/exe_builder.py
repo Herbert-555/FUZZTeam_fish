@@ -138,6 +138,17 @@ def _build_with_footer(server_url, token, config, exe_name):
             dst.write(src.read())
             dst.write(footer)
 
+    # Inject custom icon into the PE (works on Linux via pefile)
+    from .config_manager import get_icon_path
+    icon_path = get_icon_path()
+    if icon_path and os.path.exists(icon_path):
+        try:
+            from .pe_icon import inject_icon
+            inject_icon(exe_path, icon_path)
+        except Exception as e:
+            import sys
+            print(f"[!] Icon injection failed for {exe_name}: {e}", file=sys.stderr)
+
     register_exe(token, os.path.basename(exe_path))
     return exe_path
 

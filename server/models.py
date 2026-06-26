@@ -154,17 +154,23 @@ def add_collection(target_id, ip_address, mac_address, hostname, username,
 
 def delete_collection(collection_id):
     conn = get_db()
+    row = conn.execute('SELECT screenshot_path FROM collections WHERE id = ?', (collection_id,)).fetchone()
+    screenshot = row['screenshot_path'] if row else ''
     conn.execute('DELETE FROM collections WHERE id = ?', (collection_id,))
     conn.commit()
     conn.close()
+    return screenshot
 
 
 def delete_collections_batch(ids):
     conn = get_db()
     placeholders = ','.join('?' for _ in ids)
+    rows = conn.execute(f'SELECT screenshot_path FROM collections WHERE id IN ({placeholders})', ids).fetchall()
+    screenshots = [r['screenshot_path'] for r in rows if r['screenshot_path']]
     conn.execute(f'DELETE FROM collections WHERE id IN ({placeholders})', ids)
     conn.commit()
     conn.close()
+    return screenshots
 
 
 def get_collections_by_target(target_id):
@@ -205,7 +211,13 @@ def get_stats():
     total_collected = conn.execute(
         'SELECT COUNT(DISTINCT target_id) FROM collections'
     ).fetchone()[0]
-    total_exes = conn.execute('SELECT COUNT(*) FROM targets').fetchone()[0]
+    import json
+    registry_path = os.path.join(DB_DIR, 'exe_registry.json')
+    try:
+        with open(registry_path, 'r', encoding='utf-8') as f:
+            total_exes = len(json.load(f))
+    except Exception:
+        total_exes = 0
     conn.close()
     return {
         'total_targets': total_targets,

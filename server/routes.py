@@ -11,7 +11,21 @@ from .models import (
     init_db, add_target, add_targets_batch, get_all_targets,
     get_target_by_id, get_target_by_token, add_collection,
     get_collections_by_target, get_all_collections, get_stats,
+    delete_collection, delete_collections_batch,
 )
+
+UPLOADS_DIR = os.path.join(os.path.dirname(os.path.dirname(__file__)), 'uploads')
+
+
+def _remove_screenshot(filename):
+    if not filename:
+        return
+    path = os.path.join(UPLOADS_DIR, filename)
+    if os.path.exists(path):
+        try:
+            os.remove(path)
+        except OSError:
+            pass
 
 # ---- Management Web UI Blueprint ----
 routes_web = Blueprint('routes_web', __name__)
@@ -266,10 +280,14 @@ def target_detail(target_id):
 def delete_target(target_id):
     from .models import get_db
     conn = get_db()
+    rows = conn.execute('SELECT screenshot_path FROM collections WHERE target_id = ?', (target_id,)).fetchall()
+    screenshots = [r['screenshot_path'] for r in rows if r['screenshot_path']]
     conn.execute('DELETE FROM collections WHERE target_id = ?', (target_id,))
     conn.execute('DELETE FROM targets WHERE id = ?', (target_id,))
     conn.commit()
     conn.close()
+    for s in screenshots:
+        _remove_screenshot(s)
     flash('目标已删除', 'success')
     return redirect(url_for('routes_web.targets'))
 
@@ -380,10 +398,14 @@ def batch_delete_targets():
         conn = get_db()
         id_list = [int(i) for i in ids]
         placeholders = ','.join('?' for _ in id_list)
+        rows = conn.execute(f'SELECT screenshot_path FROM collections WHERE target_id IN ({placeholders})', id_list).fetchall()
+        screenshots = [r['screenshot_path'] for r in rows if r['screenshot_path']]
         conn.execute(f'DELETE FROM collections WHERE target_id IN ({placeholders})', id_list)
         conn.execute(f'DELETE FROM targets WHERE id IN ({placeholders})', id_list)
         conn.commit()
         conn.close()
+        for s in screenshots:
+            _remove_screenshot(s)
         flash(f'已删除 {len(ids)} 个目标', 'success')
     return redirect(url_for('routes_web.targets'))
 
@@ -535,8 +557,8 @@ def collections():
 @routes_web.route('/collections/<int:col_id>/delete', methods=['POST'])
 @login_required
 def delete_single_collection(col_id):
-    from .models import delete_collection
-    delete_collection(col_id)
+    screenshot = delete_collection(col_id)
+    _remove_screenshot(screenshot)
     flash('已删除', 'success')
     return redirect(url_for('routes_web.collections'))
 
@@ -544,10 +566,11 @@ def delete_single_collection(col_id):
 @routes_web.route('/collections/batch_delete', methods=['POST'])
 @login_required
 def batch_delete_collections():
-    from .models import delete_collections_batch
     ids = request.form.getlist('ids[]')
     if ids:
-        delete_collections_batch([int(i) for i in ids])
+        screenshots = delete_collections_batch([int(i) for i in ids])
+        for s in screenshots:
+            _remove_screenshot(s)
         flash(f'已删除 {len(ids)} 条记录', 'success')
     return redirect(url_for('routes_web.collections'))
 
@@ -727,8 +750,9 @@ def api_collect():
         uploads_dir = os.path.join(os.path.dirname(os.path.dirname(__file__)), 'uploads')
         os.makedirs(uploads_dir, exist_ok=True)
 
+        import secrets
         timestamp = datetime.now().strftime('%Y%m%d_%H%M%S')
-        filename = f"screenshot_{target['id']}_{timestamp}.jpg"
+        filename = f"screenshot_{target['id']}_{timestamp}_{secrets.token_hex(4)}.jpg"
         filepath = os.path.join(uploads_dir, filename)
         screenshot_file.save(filepath)
         screenshot_path = filename

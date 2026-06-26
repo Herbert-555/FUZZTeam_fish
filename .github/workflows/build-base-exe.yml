@@ -1,0 +1,38 @@
+name: Build Base EXE
+
+on:
+  push:
+    paths:
+      - 'client/collector.py'
+  workflow_dispatch:
+
+jobs:
+  build:
+    runs-on: windows-latest
+
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-python@v5
+        with:
+          python-version: '3.8'
+
+      - name: Install dependencies
+        run: pip install -r requirements.txt
+
+      - name: Build collector_base.exe
+        run: |
+          python -c "
+          import sys
+          sys.path.insert(0, '.')
+          from server.exe_builder import build_base_exe
+          path = build_base_exe()
+          print(f'Base EXE built: {path}')
+          "
+
+      - name: Upload artifact
+        uses: actions/upload-artifact@v4
+        with:
+          name: collector_base
+          path: client/collector_base.exe
+          retention-days: 90
