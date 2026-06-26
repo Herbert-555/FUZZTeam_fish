@@ -417,8 +417,6 @@ def batch_delete_targets():
             unregister_exe(t['unique_token'])
         flash(f'已删除 {len(ids)} 个目标', 'success')
     return redirect(url_for('routes_web.targets'))
-        flash(f'已删除 {len(ids)} 个目标', 'success')
-    return redirect(url_for('routes_web.targets'))
 
 
 @routes_web.route('/targets/batch_build_exe', methods=['POST'])
