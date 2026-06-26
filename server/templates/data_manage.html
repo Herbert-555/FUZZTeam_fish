@@ -1,0 +1,24 @@
+{% extends "base.html" %}
+{% block title %}数据管理 - 钓鱼演练系统{% endblock %}
+{% block content %}
+<h1 style="margin-bottom:24px;">数据管理</h1>
+
+<div class="card" style="margin-bottom:24px;">
+    <h2>导出数据</h2>
+    <p style="color:#666;margin-bottom:16px;">导出所有目标、回传记录、截图、配置为一个压缩包，可在其他环境导入恢复。</p>
+    <p style="color:#c09853;margin-bottom:16px;">包含：数据库、回传截图、EXE配置、图标文件。不含已生成的EXE文件。</p>
+    <a href="{{ url_for('routes_web.export_data') }}" class="btn" style="display:inline-block;">📦 导出压缩包</a>
+</div>
+
+<div class="card">
+    <h2>导入数据</h2>
+    <p style="color:#c09853;margin-bottom:16px;">⚠️ 导入将覆盖当前所有数据，系统会自动备份当前数据到 backups 目录。</p>
+    <form method="POST" action="{{ url_for('routes_web.import_data') }}" enctype="multipart/form-data" onsubmit="return confirm('导入将覆盖当前所有数据，确认继续？');">
+        <div style="margin-bottom:16px;">
+            <label for="backup_file">选择备份文件 (.zip)：</label>
+            <input type="file" id="backup_file" name="backup_file" accept=".zip" required style="display:block;margin-top:8px;">
+        </div>
+        <button type="submit" class="btn btn-danger">📥 导入并恢复数据</button>
+    </form>
+</div>
+{% endblock %}

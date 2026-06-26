@@ -38,14 +38,14 @@ def main():
 """
     print(banner)
 
-    # Windows: auto-rebuild base EXE on every startup (async)
+    # Windows: auto-rebuild all base EXEs on startup (async)
     if sys.platform == 'win32':
         print("[*] 正在后台构建基础 EXE (首次需要1-3分钟)...")
         def _build_base():
             try:
-                from server.exe_builder import build_base_exe
-                path = build_base_exe()
-                print(f"[*] 基础 EXE 构建完成: {path}")
+                from server.exe_builder import build_all_base_exes
+                results = build_all_base_exes()
+                print(f"[*] 基础 EXE 构建完成: {len(results)} 个")
             except Exception as e:
                 print(f"[!] 基础 EXE 构建失败: {e}")
         base_thread = threading.Thread(target=_build_base, daemon=True)

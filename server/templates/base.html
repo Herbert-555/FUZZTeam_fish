@@ -14,6 +14,7 @@
     <a href="{{ url_for('routes_web.exe_generate') }}" {% if request.endpoint and request.endpoint.startswith('routes_web.exe_generate') %}class="active"{% endif %}>EXE生成</a>
     <a href="{{ url_for('routes_web.collections') }}" {% if request.endpoint == 'routes_web.collections' %}class="active"{% endif %}>采集数据</a>
     <a href="{{ url_for('routes_web.exe_config') }}" {% if request.endpoint == 'routes_web.exe_config' %}class="active"{% endif %}>EXE配置</a>
+    <a href="{{ url_for('routes_web.data_manage') }}" {% if request.endpoint == 'routes_web.data_manage' %}class="active"{% endif %}>数据管理</a>
     <a href="{{ url_for('routes_web.logout') }}" style="margin-left:auto;">退出</a>
 </nav>
 

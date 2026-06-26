@@ -446,10 +446,10 @@ def _get_listen_url():
 @routes_web.route('/exe/build_base', methods=['POST'])
 @login_required
 def build_base():
-    from .exe_builder import build_base_exe, BASE_EXE_PATH
+    from .exe_builder import build_all_base_exes
     try:
-        path = build_base_exe()
-        flash(f'基础EXE构建成功: {os.path.basename(path)}', 'success')
+        results = build_all_base_exes()
+        flash(f'基础EXE构建成功: {len(results)} 个', 'success')
     except Exception as e:
         flash(f'构建失败: {e}', 'error')
     return redirect(url_for('routes_web.exe_generate'))
@@ -722,6 +722,155 @@ def exe_config():
     config = load_config()
     preview = config['name_template'].replace('{name}', '张三').replace('{token8}', 'a1b2c3d4').replace('{token}', 'a1b2c3d4-xxxx-xxxx-xxxx-xxxxxxxxxxxx')
     return render_template('exe_config.html', config=config, preview=preview, presets=presets)
+
+
+# ---- Data Export / Import ----
+
+
+@routes_web.route('/data')
+@login_required
+def data_manage():
+    return render_template('data_manage.html')
+
+
+@routes_web.route('/data/export')
+@login_required
+def export_data():
+    import zipfile
+    import tempfile
+    import shutil
+    from datetime import datetime
+
+    base = os.path.dirname(os.path.dirname(__file__))
+    data_dir = os.path.join(base, 'data')
+    uploads_dir = os.path.join(base, 'uploads')
+    icons_dir = os.path.join(base, 'output', 'icons')
+
+    tmpdir = tempfile.mkdtemp()
+    timestamp = datetime.now().strftime('%Y%m%d_%H%M%S')
+    zip_path = os.path.join(tmpdir, f'fuzzteam_backup_{timestamp}.zip')
+
+    try:
+        with zipfile.ZipFile(zip_path, 'w', zipfile.ZIP_DEFLATED) as zf:
+            # database
+            db_path = os.path.join(data_dir, 'database.db')
+            if os.path.exists(db_path):
+                zf.write(db_path, 'database.db')
+            # configs
+            for cfg in ('exe_config.json', 'exe_registry.json'):
+                cfg_path = os.path.join(data_dir, cfg)
+                if os.path.exists(cfg_path):
+                    zf.write(cfg_path, cfg)
+            # uploads
+            if os.path.exists(uploads_dir):
+                for f in os.listdir(uploads_dir):
+                    fp = os.path.join(uploads_dir, f)
+                    if os.path.isfile(fp):
+                        zf.write(fp, f'uploads/{f}')
+            # icons
+            if os.path.exists(icons_dir):
+                for f in os.listdir(icons_dir):
+                    if f.endswith('.ico'):
+                        zf.write(os.path.join(icons_dir, f), f'icons/{f}')
+
+        return send_file(zip_path, as_attachment=True,
+                         download_name=f'fuzzteam_backup_{timestamp}.zip')
+    finally:
+        # schedule cleanup (best effort after response)
+        import threading
+        def _clean():
+            try:
+                shutil.rmtree(tmpdir)
+            except Exception:
+                pass
+        threading.Thread(target=_clean, daemon=True).start()
+
+
+@routes_web.route('/data/import', methods=['POST'])
+@login_required
+def import_data():
+    import zipfile
+    import tempfile
+    import shutil
+    from datetime import datetime
+
+    uploaded = request.files.get('backup_file')
+    if not uploaded or not uploaded.filename:
+        flash('请选择备份文件', 'error')
+        return redirect(url_for('routes_web.data_manage'))
+
+    if not uploaded.filename.lower().endswith('.zip'):
+        flash('仅支持 .zip 格式', 'error')
+        return redirect(url_for('routes_web.data_manage'))
+
+    base = os.path.dirname(os.path.dirname(__file__))
+    data_dir = os.path.join(base, 'data')
+    uploads_dir = os.path.join(base, 'uploads')
+    icons_dir = os.path.join(base, 'output', 'icons')
+    backups_dir = os.path.join(base, 'backups')
+
+    tmpdir = tempfile.mkdtemp()
+    zip_path = os.path.join(tmpdir, 'import.zip')
+
+    try:
+        uploaded.save(zip_path)
+
+        # Validate zip
+        with zipfile.ZipFile(zip_path, 'r') as zf:
+            names = zf.namelist()
+            if 'database.db' not in names:
+                flash('备份文件无效：未找到 database.db', 'error')
+                return redirect(url_for('routes_web.data_manage'))
+
+        # Auto-backup current data
+        timestamp = datetime.now().strftime('%Y%m%d_%H%M%S')
+        backup_path = os.path.join(backups_dir, f'pre_import_{timestamp}')
+        os.makedirs(backup_path, exist_ok=True)
+        for f in os.listdir(data_dir):
+            fp = os.path.join(data_dir, f)
+            if os.path.isfile(fp):
+                shutil.copy2(fp, os.path.join(backup_path, f))
+        flash(f'当前数据已备份至 backups/pre_import_{timestamp}', 'success')
+
+        # Extract and restore
+        with zipfile.ZipFile(zip_path, 'r') as zf:
+            zf.extractall(tmpdir)
+
+        # Replace database
+        src_db = os.path.join(tmpdir, 'database.db')
+        if os.path.exists(src_db):
+            shutil.copy2(src_db, os.path.join(data_dir, 'database.db'))
+
+        # Replace configs
+        for cfg in ('exe_config.json', 'exe_registry.json'):
+            src = os.path.join(tmpdir, cfg)
+            if os.path.exists(src):
+                shutil.copy2(src, os.path.join(data_dir, cfg))
+
+        # Replace uploads
+        src_uploads = os.path.join(tmpdir, 'uploads')
+        if os.path.exists(src_uploads):
+            if os.path.exists(uploads_dir):
+                shutil.rmtree(uploads_dir)
+            shutil.copytree(src_uploads, uploads_dir)
+
+        # Replace icons
+        src_icons = os.path.join(tmpdir, 'icons')
+        if os.path.exists(src_icons):
+            os.makedirs(icons_dir, exist_ok=True)
+            for f in os.listdir(src_icons):
+                shutil.copy2(os.path.join(src_icons, f), os.path.join(icons_dir, f))
+
+        flash('数据导入成功', 'success')
+    except Exception as e:
+        flash(f'导入失败: {e}', 'error')
+    finally:
+        try:
+            shutil.rmtree(tmpdir)
+        except Exception:
+            pass
+
+    return redirect(url_for('routes_web.data_manage'))
 
 
 # ---- API Blueprint (data collection endpoint) ----
