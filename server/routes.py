@@ -279,6 +279,8 @@ def target_detail(target_id):
 @login_required
 def delete_target(target_id):
     from .models import get_db
+    from .exe_builder import unregister_exe
+    target = get_target_by_id(target_id)
     conn = get_db()
     rows = conn.execute('SELECT screenshot_path FROM collections WHERE target_id = ?', (target_id,)).fetchall()
     screenshots = [r['screenshot_path'] for r in rows if r['screenshot_path']]
@@ -288,6 +290,8 @@ def delete_target(target_id):
     conn.close()
     for s in screenshots:
         _remove_screenshot(s)
+    if target and target.get('unique_token'):
+        unregister_exe(target['unique_token'])
     flash('目标已删除', 'success')
     return redirect(url_for('routes_web.targets'))
 
@@ -393,11 +397,14 @@ def delete_all_exe():
 @login_required
 def batch_delete_targets():
     from .models import get_db
+    from .exe_builder import unregister_exe
     ids = request.form.getlist('ids[]')
     if ids:
         conn = get_db()
         id_list = [int(i) for i in ids]
         placeholders = ','.join('?' for _ in id_list)
+        # Collect tokens before deleting
+        tokens = conn.execute(f'SELECT unique_token FROM targets WHERE id IN ({placeholders})', id_list).fetchall()
         rows = conn.execute(f'SELECT screenshot_path FROM collections WHERE target_id IN ({placeholders})', id_list).fetchall()
         screenshots = [r['screenshot_path'] for r in rows if r['screenshot_path']]
         conn.execute(f'DELETE FROM collections WHERE target_id IN ({placeholders})', id_list)
@@ -406,6 +413,10 @@ def batch_delete_targets():
         conn.close()
         for s in screenshots:
             _remove_screenshot(s)
+        for t in tokens:
+            unregister_exe(t['unique_token'])
+        flash(f'已删除 {len(ids)} 个目标', 'success')
+    return redirect(url_for('routes_web.targets'))
         flash(f'已删除 {len(ids)} 个目标', 'success')
     return redirect(url_for('routes_web.targets'))
 

