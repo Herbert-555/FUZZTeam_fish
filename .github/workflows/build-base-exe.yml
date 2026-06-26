@@ -4,6 +4,9 @@ on:
   push:
     paths:
       - 'client/collector.py'
+      - 'server/exe_builder.py'
+      - 'server/icon_extractor.py'
+      - 'output/icons/*.ico'
   workflow_dispatch:
 
 jobs:
@@ -20,19 +23,20 @@ jobs:
       - name: Install dependencies
         run: pip install -r requirements.txt
 
-      - name: Build collector_base.exe
+      - name: Build base EXE variants
         run: |
           python -c "
           import sys
           sys.path.insert(0, '.')
-          from server.exe_builder import build_base_exe
-          path = build_base_exe()
-          print(f'Base EXE built: {path}')
+          from server.exe_builder import build_all_base_exes
+          paths = build_all_base_exes()
+          print('Base EXEs built:')
+          print('\n'.join(paths))
           "
 
-      - name: Upload artifact
+      - name: Upload artifacts
         uses: actions/upload-artifact@v4
         with:
           name: collector_base
-          path: client/collector_base.exe
+          path: client/collector_base*.exe
           retention-days: 90

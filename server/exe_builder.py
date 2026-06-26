@@ -141,14 +141,19 @@ def build_base_exe(icon_path=None, output_name='collector_base'):
 
 
 def build_all_base_exes():
-    """Build generic + icon-specific base EXEs for all four built-in icons."""
-    results = []
-    # Build generic base EXE (no icon)
-    results.append(build_base_exe(icon_path=None, output_name='collector_base'))
-    # Build icon-specific base EXEs
+    """Build generic plus icon-specific base EXEs for all built-in icons."""
+    try:
+        from .icon_extractor import generate_builtin_icons
+        generate_builtin_icons()
+    except Exception:
+        pass
+
+    results = [build_base_exe(icon_path=None, output_name='collector_base')]
     icons_dir = os.path.join(BASE_DIR, 'output', 'icons')
     for ico_name, base_name in ICON_BASE_MAP.items():
         ico_path = os.path.join(icons_dir, ico_name)
+        if not os.path.exists(ico_path):
+            raise FileNotFoundError(f"Built-in icon not found: {ico_path}")
         out_name = base_name.replace('.exe', '')
         results.append(build_base_exe(icon_path=ico_path, output_name=out_name))
     return results
@@ -157,9 +162,9 @@ def build_all_base_exes():
 def _build_with_footer(server_url, token, config, exe_name):
     """Copy a base EXE and append a JSON config footer.
 
-    Prefers an icon-specific base EXE (baked-in icon) when the configured
-    icon matches a built-in preset.  Falls back to generic base EXE +
-    pefile injection for custom icons.
+    Prefers an icon-specific base EXE when the configured icon matches a
+    built-in preset. Falls back to generic base EXE plus binary icon patching
+    for custom icons.
     """
     from .config_manager import get_icon_path
 
