@@ -15,7 +15,7 @@ def _ensure_dirs():
 def create_manage_app(admin_path=''):
     """Create the management web UI Flask app."""
     app = Flask(__name__)
-    app.secret_key = 'fuzzteam_fish_secret_2026'
+    app.secret_key = 'drill_console_secret_2026'
 
     app.config['ADMIN_PATH'] = admin_path
 

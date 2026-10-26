@@ -185,6 +185,8 @@
                     <td>
                         {% if f.kind == 'lnk' %}
                         <span class="badge badge-muted"><span class="dot"></span>LNK 包</span>
+                        {% elif f.kind == 'iso' %}
+                        <span class="badge badge-muted"><span class="dot"></span>ISO 镜像</span>
                         {% else %}
                         <span class="badge badge-muted"><span class="dot"></span>EXE</span>
                         {% endif %}

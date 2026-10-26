@@ -106,7 +106,7 @@ for _ in $(seq 1 60); do
 done
 
 log "===================================================="
-log "FUZZTeam_fish 更新完成"
+log "安全演练平台 更新完成"
 if [ -n "$ADMIN_URL" ]; then
     log "管理面板: $ADMIN_URL"
 else

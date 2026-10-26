@@ -1,4 +1,4 @@
-/* FUZZTeam Fish - shell interactions
+/* Drill console - shell interactions
    Theme toggle, responsive sidebar, flash/toast, copy, confirm dialog, lightbox.
    No dependencies. */
 (function () {

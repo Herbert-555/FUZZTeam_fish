@@ -29,7 +29,7 @@ def main():
 
     banner = f"""
 ====================================================
-   钓鱼演练系统 - FUZZTeam_fish
+   钓鱼演练系统
    管理面板:     http://{bind_host}:{args.manage_port}/{admin_path}/
    数据监听端口: {args.listen_port}
    请在 EXE 配置页面设置目标可达的回传地址
