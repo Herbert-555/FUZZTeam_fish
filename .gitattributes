@@ -1,0 +1,3 @@
+# Keep shell scripts LF on checkout/archive so Linux deploy scripts stay runnable
+*.sh text eol=lf
+.githooks/* text eol=lf
