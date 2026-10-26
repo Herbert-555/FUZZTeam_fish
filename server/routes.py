@@ -14,6 +14,8 @@ from .models import (
     get_collections_by_target, get_all_collections, get_stats,
     delete_collection, delete_collections_batch,
     count_targets, get_targets_page, count_collections, get_collections_page,
+    count_collections_by_target, get_collections_by_target_page,
+    get_collection_for_target,
 )
 
 UPLOADS_DIR = os.path.join(os.path.dirname(os.path.dirname(__file__)), 'uploads')
@@ -146,6 +148,26 @@ def _exe_exists(target_name, token):
     return is_exe_registered(token)
 
 
+def _exe_artifact(target):
+    """Registered EXE filename, or '' when the file is missing on disk."""
+    from .exe_builder import OUTPUT_DIR, get_exe_filename
+    filename = get_exe_filename(target['unique_token'])
+    if filename and os.path.exists(os.path.join(OUTPUT_DIR, filename)):
+        return filename
+    return ''
+
+
+def _resolve_exe_artifact(target):
+    """Prefer the registry filename; fall back to the computed name."""
+    from .exe_builder import OUTPUT_DIR, get_exe_filename
+    filename = get_exe_filename(target['unique_token'])
+    if filename and os.path.exists(os.path.join(OUTPUT_DIR, filename)):
+        return filename
+    return _exe_filename(
+        target['name'], target['unique_token'], target.get('exe_filename', '')
+    )
+
+
 @routes_web.route('/targets')
 @login_required
 def targets():
@@ -153,7 +175,8 @@ def targets():
     pagination = _build_pagination(count_targets(), page, page_size)
     all_targets = get_targets_page(pagination['page'], pagination['page_size'])
     for t in all_targets:
-        t['exe_exists'] = _exe_exists(t['name'], t['unique_token'])
+        t['exe_file'] = _exe_artifact(t)
+        t['exe_exists'] = bool(t['exe_file'])
     server_configured = _check_server_configured()
     ctx = {}
     ext = _extension()
@@ -331,6 +354,30 @@ def batch_add_targets():
     return render_template('batch_add.html')
 
 
+def _prepare_collection(c):
+    """Parse the JSON directory/MAC blobs used by detail views."""
+    try:
+        c['dir_info_parsed'] = json.loads(c['directory_info'])
+    except Exception:
+        c['dir_info_parsed'] = None
+    try:
+        mac_data = json.loads(c['mac_address']) if c.get('mac_address') else []
+        if isinstance(mac_data, dict):
+            mac_data = [mac_data]
+        mac_values = []
+        for item in mac_data:
+            mac = (item.get('mac') or '').strip() if isinstance(item, dict) else ''
+            if mac and mac not in mac_values:
+                mac_values.append(mac)
+        c['mac_list'] = ', '.join(mac_values)
+    except Exception:
+        c['mac_list'] = c.get('mac_address', '')
+    ip_lines = [line.strip() for line in str(c.get('ip_address') or '').splitlines() if line.strip()]
+    c['ip_first'] = ip_lines[0].split('(')[0].strip() if ip_lines else ''
+    c['ip_extra'] = max(0, len(ip_lines) - 1)
+    return c
+
+
 @routes_web.route('/targets/<int:target_id>')
 @login_required
 def target_detail(target_id):
@@ -338,30 +385,62 @@ def target_detail(target_id):
     if not target:
         flash('目标不存在', 'error')
         return redirect(url_for('routes_web.targets'))
-    collections = get_collections_by_target(target_id)
-    for c in collections:
-        try:
-            c['dir_info_parsed'] = json.loads(c['directory_info'])
-        except Exception:
-            c['dir_info_parsed'] = None
-        try:
-            mac_data = json.loads(c['mac_address']) if c.get('mac_address') else []
-            if isinstance(mac_data, dict):
-                mac_data = [mac_data]
-            mac_values = []
-            for item in mac_data:
-                mac = (item.get('mac') or '').strip() if isinstance(item, dict) else ''
-                if mac and mac not in mac_values:
-                    mac_values.append(mac)
-            c['mac_list'] = ', '.join(mac_values)
-        except Exception:
-            c['mac_list'] = c.get('mac_address', '')
+    collections = [_prepare_collection(c) for c in get_collections_by_target(target_id)]
     ctx = {}
     ext = _extension()
     if ext:
         ctx.update(ext.target_detail_context(target, _get_listen_url()))
     return render_template(
         'target_detail.html', target=target, collections=collections, **ctx
+    )
+
+
+COLLECTION_PAGE_SIZES = [10, 20, 50, 100]
+
+
+@routes_web.route('/targets/<int:target_id>/collections')
+@login_required
+def target_collections_modal(target_id):
+    """Paginated callback table fragment for the first-level detail modal."""
+    target = get_target_by_id(target_id)
+    if not target:
+        return '<div class="empty">目标不存在</div>', 404
+    try:
+        page = int(request.args.get('page', 1))
+    except (TypeError, ValueError):
+        page = 1
+    try:
+        page_size = int(request.args.get('page_size', 10))
+    except (TypeError, ValueError):
+        page_size = 10
+    if page_size not in COLLECTION_PAGE_SIZES:
+        page_size = 10
+    pagination = _build_pagination(
+        count_collections_by_target(target_id), page, page_size
+    )
+    collections = [
+        _prepare_collection(c)
+        for c in get_collections_by_target_page(
+            target_id, pagination['page'], pagination['page_size']
+        )
+    ]
+    return render_template(
+        '_target_collections.html', target=target, collections=collections,
+        pagination=pagination, page_sizes=COLLECTION_PAGE_SIZES,
+    )
+
+
+@routes_web.route('/targets/<int:target_id>/collections/<int:collection_id>')
+@login_required
+def collection_detail_modal(target_id, collection_id):
+    """Single callback fragment for the second-level detail modal."""
+    target = get_target_by_id(target_id)
+    collection = get_collection_for_target(target_id, collection_id)
+    if not target or not collection:
+        return '<div class="empty">回传记录不存在</div>', 404
+    _prepare_collection(collection)
+    return render_template(
+        '_collection_detail.html', target=target, collection=collection
     )
 
 
@@ -419,10 +498,12 @@ def build_exe_from_target(target_id):
     if not target:
         return jsonify({'status': 'error', 'message': '目标不存在'}), 404
 
+    payload = request.get_json(silent=True) or request.form
+    filename = str(payload.get('filename') or '').strip()
     listen_url = _get_listen_url()
     build_exe_async(
         listen_url, target['unique_token'], target['name'], target_id,
-        target.get('exe_filename', '')
+        filename or target.get('exe_filename', '')
     )
     return jsonify({'status': 'ok', 'message': '开始生成'})
 
@@ -442,7 +523,7 @@ def download_exe_from_target(target_id):
         flash('目标不存在', 'error')
         return redirect(url_for('routes_web.targets'))
 
-    filename = _exe_filename(target['name'], target['unique_token'], target.get('exe_filename', ''))
+    filename = _resolve_exe_artifact(target)
     from .exe_builder import OUTPUT_DIR
     filepath = os.path.join(OUTPUT_DIR, filename)
     if not os.path.exists(filepath):
@@ -460,7 +541,7 @@ def delete_exe_from_target(target_id):
         flash('目标不存在', 'error')
         return redirect(url_for('routes_web.targets'))
 
-    filename = _exe_filename(target['name'], target['unique_token'], target.get('exe_filename', ''))
+    filename = _resolve_exe_artifact(target)
     from .exe_builder import OUTPUT_DIR, unregister_exe
     filepath = os.path.join(OUTPUT_DIR, filename)
     if os.path.exists(filepath):
@@ -821,7 +902,10 @@ def exe_config():
         if ext:
             ext.handle_config_post(request)
 
-        return redirect(url_for('routes_web.exe_config'))
+        anchor = 'lnk' if request.form.get('config_tab') == 'lnk' else None
+        return redirect(url_for(
+            'routes_web.exe_config', _anchor=anchor
+        ) if anchor else url_for('routes_web.exe_config'))
 
     # Generate built-in icons if not exist
     try:

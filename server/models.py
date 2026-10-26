@@ -226,6 +226,49 @@ def get_collections_by_target(target_id):
     return result
 
 
+def count_collections_by_target(target_id):
+    conn = get_db()
+    total = conn.execute(
+        'SELECT COUNT(*) FROM collections WHERE target_id = ?', (target_id,)
+    ).fetchone()[0]
+    conn.close()
+    return total
+
+
+def get_collections_by_target_page(target_id, page=1, page_size=20):
+    page = max(1, int(page))
+    page_size = max(1, int(page_size))
+    limit = -1 if page_size >= 99999 else page_size
+    offset = (page - 1) * page_size
+    conn = get_db()
+    rows = conn.execute(
+        'SELECT * FROM collections WHERE target_id = ? '
+        'ORDER BY received_at DESC, id DESC LIMIT ? OFFSET ?',
+        (target_id, limit, offset)
+    ).fetchall()
+    conn.close()
+    result = []
+    for r in rows:
+        d = dict(r)
+        d['received_at'] = _to_local(d.get('received_at'))
+        result.append(d)
+    return result
+
+
+def get_collection_for_target(target_id, collection_id):
+    conn = get_db()
+    row = conn.execute(
+        'SELECT * FROM collections WHERE id = ? AND target_id = ?',
+        (collection_id, target_id)
+    ).fetchone()
+    conn.close()
+    if not row:
+        return None
+    d = dict(row)
+    d['received_at'] = _to_local(d.get('received_at'))
+    return d
+
+
 def get_all_collections():
     conn = get_db()
     rows = conn.execute('''

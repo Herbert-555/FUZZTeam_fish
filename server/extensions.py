@@ -21,7 +21,10 @@ def get_extension():
         if BASE_DIR not in sys.path:
             sys.path.insert(0, BASE_DIR)
         try:
-            _module = importlib.import_module(EXTENSION_PACKAGE)
+            module = importlib.import_module(EXTENSION_PACKAGE)
         except ImportError:
-            _module = None
+            module = None
+        # A leftover empty directory makes Python import a namespace package;
+        # treat that as "extension not installed".
+        _module = module if getattr(module, '__file__', None) else None
     return _module

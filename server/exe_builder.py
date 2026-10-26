@@ -80,6 +80,12 @@ def is_exe_registered(token):
         return token in reg
 
 
+def get_exe_filename(token):
+    """Return the registered output filename for a token, if any."""
+    with _registry_lock:
+        return _load_registry().get(token, '')
+
+
 def get_build_status(target_id):
     with _lock:
         return _build_status.get(target_id, None)
