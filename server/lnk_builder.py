@@ -62,16 +62,15 @@ EVASION_OPTIONS = (
 )
 EVASION_CHOICES = tuple(key for key, _, _ in EVASION_OPTIONS)
 
-# Live results from Windows 10 + 360 Total Security + Defender (2026-10-26).
-# 'ok' means no AV alert and a successful callback. conhost is the built-in
-# default; the other rows were tested on top of the older ftp.exe launcher.
+# Live results from Windows 10 + 360 Total Security + Defender (2026-10-26,
+# all rows retested on the current conhost launcher).
 EVASION_RESULTS = {
-    'conhost': (True, '默认启动链，无拦截，载荷回连成功'),
-    'vbs': (False, '360 拦截 ftp.exe「钓鱼快捷方式」'),
-    'obfuscate': (False, '360 拦截 ftp.exe「钓鱼快捷方式」'),
-    'decoy': (False, '360 拦截 ftp.exe「钓鱼快捷方式」'),
-    'pad': (False, '360 拦截 ftp.exe「钓鱼快捷方式」'),
-    'macosx': (False, '360 拦截 ftp.exe「钓鱼快捷方式」'),
+    'conhost': (True, '默认启动链，ZIP/ISO 实测无拦截，载荷成功回连'),
+    'vbs': (False, '360 弹窗拦截 run.bat 调用 Explorer 启动载荷，未回连'),
+    'obfuscate': (False, '360 弹窗拦截 Explorer 启动载荷，未回连'),
+    'decoy': (False, '360 弹窗拦截 Explorer 启动载荷，未回连'),
+    'pad': (False, 'LNK 被 Defender 判为 Exploit:Win32/Kloshag.D!dha 并删除'),
+    'macosx': (True, '__MACOSX 伪装 + conhost 链，实测无拦截，载荷回连成功'),
 }
 
 _lock = threading.Lock()

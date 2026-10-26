@@ -198,7 +198,7 @@
                     {% endfor %}
                 </div>
                 <span class="help">conhost 启动链为默认免杀方式，始终启用；其余为附加伪装层，可多选叠加。VBS 隐藏链、字符串拆分与诱饵文档会自动串接 Explorer → VBS → BAT 执行链。</span>
-                <span class="help">徽标为实机结果（Win10 + 360 极速版 + Defender）：conhost 默认链无拦截、载荷成功回连；其余选项在旧 ftp 启动链上测试时均被 360「钓鱼快捷方式」拦截；conhost 与 VBS 混用会在 run.bat 阶段被拦；全部启用时 LNK 被 Defender 判为 Exploit:Win32/Kloshag.D!dha 并删除。</span>
+                <span class="help">徽标为实机结果（Win10 + 360 极速版 + Defender，2026-10-26 复测）：conhost 默认链与 __MACOSX 伪装均无拦截、载荷成功回连；VBS / 字符串拆分 / 诱饵会在 run.bat 调用 Explorer 启动载荷时被 360 弹窗拦截；参数空白填充会使 LNK 被 Defender 判为 Exploit:Win32/Kloshag.D!dha 并删除，不建议勾选。</span>
             </div>
 
             <div class="preview-box"
