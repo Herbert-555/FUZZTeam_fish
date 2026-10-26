@@ -14,6 +14,8 @@ DEFAULT_CONFIG = {
     'popup_message': 'xx公司员工安全意识测试，如有疑问请联系省公司安全部门/信息科',
     'server_host': '127.0.0.1',
     'server_port': 8080,
+    'lnk_lure_ext': 'pdf',
+    'lnk_evasion': [],
 }
 
 

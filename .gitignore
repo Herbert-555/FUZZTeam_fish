@@ -9,6 +9,8 @@ client_build/
 
 # Generated output
 output/*.exe
+output/*.zip
+output/*.part
 
 # Local QA artifacts
 preview/
@@ -17,6 +19,7 @@ preview/
 data/database.db
 data/exe_config.json
 data/exe_registry.json
+data/lnk_registry.json
 
 # Uploaded files (user data)
 uploads/

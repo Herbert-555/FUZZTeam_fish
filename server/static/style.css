@@ -1655,6 +1655,51 @@ input[type="checkbox"] {
     line-height: 1.5;
 }
 
+/* Evasion multi-select */
+.evasion-grid {
+    display: grid;
+    grid-template-columns: repeat(auto-fill, minmax(230px, 1fr));
+    gap: 8px;
+}
+
+.evasion-option {
+    display: flex;
+    align-items: flex-start;
+    gap: 9px;
+    padding: 10px 11px;
+    background: var(--surface-2);
+    border: 1px solid var(--hairline);
+    border-radius: var(--radius-sm);
+    cursor: pointer;
+    transition: border-color 0.12s ease, background 0.12s ease;
+}
+
+.evasion-option:hover {
+    border-color: var(--hairline-strong);
+}
+
+.evasion-option input[type="checkbox"] {
+    margin: 2px 0 0;
+    flex: 0 0 auto;
+    accent-color: var(--primary);
+    cursor: pointer;
+}
+
+.evasion-text strong {
+    display: block;
+    color: var(--ink-muted);
+    font-size: 12.5px;
+    font-weight: 500;
+}
+
+.evasion-text small {
+    display: block;
+    margin-top: 2px;
+    color: var(--ink-tertiary);
+    font-size: 11.5px;
+    line-height: 1.5;
+}
+
 /* ---- Detail grid ------------------------------------------------------- */
 .detail-grid {
     display: grid;

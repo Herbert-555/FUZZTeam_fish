@@ -1,11 +1,11 @@
 {% extends "base.html" %}
-{% block title %}EXE 生成 · 钓鱼演练系统{% endblock %}
-{% block page_name %}EXE 生成{% endblock %}
+{% block title %}EXE / LNK 生成 · 钓鱼演练系统{% endblock %}
+{% block page_name %}EXE / LNK 生成{% endblock %}
 {% block content %}
 <div class="page-header">
     <div>
-        <h1 class="page-title">EXE 生成</h1>
-        <p class="page-sub">用基础 EXE + 配置注入，为每个目标生成独立文件。</p>
+        <h1 class="page-title">EXE / LNK 生成</h1>
+        <p class="page-sub">用基础 EXE + 配置注入，为每个目标生成独立 EXE 或 LNK 压缩包。</p>
     </div>
     <div class="page-actions">
         <a class="btn btn-secondary" href="{{ url_for('routes_web.exe_config') }}">
@@ -110,9 +110,17 @@
                         {% endif %}
                     </td>
                     <td>
-                        <form class="inline-form" action="{{ url_for('routes_web.build_single_exe', target_id=t.id) }}" method="POST">
-                            <button class="btn btn-secondary btn-sm" type="submit">单独生成</button>
-                        </form>
+                        <div class="row-actions">
+                            <form class="inline-form" action="{{ url_for('routes_web.build_single_exe', target_id=t.id) }}" method="POST">
+                                <button class="btn btn-secondary btn-sm" type="submit">生成 EXE</button>
+                            </form>
+                            <form class="inline-form" action="{{ url_for('routes_web.build_single_lnk', target_id=t.id) }}" method="POST">
+                                <button class="btn btn-secondary btn-sm" type="submit">
+                                    <svg class="icon" aria-hidden="true"><use href="#i-archive"></use></svg>
+                                    生成 LNK
+                                </button>
+                            </form>
+                        </div>
                     </td>
                 </tr>
                 {% endfor %}
@@ -123,7 +131,13 @@
         <div class="toolbar-left">
             <button class="btn btn-primary" type="submit" form="batchBuildForm" {% if not server_configured %}disabled title="请先在 EXE 配置页面设置服务器 IP"{% endif %}>
                 <svg class="icon" aria-hidden="true"><use href="#i-zap"></use></svg>
-                批量生成选中
+                批量生成 EXE
+            </button>
+            <button class="btn btn-secondary" type="submit" form="batchBuildForm"
+                    formaction="{{ url_for('routes_web.build_batch_lnk_packages') }}"
+                    {% if not server_configured %}disabled title="请先在 EXE 配置页面设置服务器 IP"{% endif %}>
+                <svg class="icon" aria-hidden="true"><use href="#i-archive"></use></svg>
+                批量生成 LNK
             </button>
         </div>
         <div class="toolbar-right">
@@ -149,7 +163,7 @@
         <div>
             <div class="card-title">
                 <svg class="icon" aria-hidden="true"><use href="#i-package-check"></use></svg>
-                已生成的 EXE
+                已生成文件
                 <span class="badge badge-muted">{{ files|length }}</span>
             </div>
             <div class="card-sub">按生成时间倒序。</div>
@@ -160,15 +174,23 @@
             <thead>
                 <tr>
                     <th>文件名</th>
+                    <th>类型</th>
                     <th>操作</th>
                 </tr>
             </thead>
             <tbody>
                 {% for f in files %}
                 <tr>
-                    <td><span class="mono">{{ f }}</span></td>
+                    <td><span class="mono">{{ f.name }}</span></td>
                     <td>
-                        <a class="btn btn-secondary btn-sm" href="{{ url_for('routes_web.download_exe', filename=f) }}">
+                        {% if f.kind == 'lnk' %}
+                        <span class="badge badge-muted"><span class="dot"></span>LNK 包</span>
+                        {% else %}
+                        <span class="badge badge-muted"><span class="dot"></span>EXE</span>
+                        {% endif %}
+                    </td>
+                    <td>
+                        <a class="btn btn-secondary btn-sm" href="{{ url_for('routes_web.download_exe', filename=f.name) }}">
                             <svg class="icon" aria-hidden="true"><use href="#i-download"></use></svg>
                             下载
                         </a>
