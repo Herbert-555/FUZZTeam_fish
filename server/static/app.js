@@ -528,6 +528,79 @@
         );
     });
 
+    /* ---- LNK container picker ---- */
+    var lnkForm = document.querySelector('[data-lnk-form]');
+    if (lnkForm) {
+        var lnkPreview = lnkForm.querySelector('[data-lnk-preview]');
+        var passwordBox = lnkForm.querySelector('[data-container-password]');
+        var passwordInput = passwordBox ? passwordBox.querySelector('input') : null;
+
+        var syncContainer = function () {
+            var selected = lnkForm.querySelector('input[name="lnk_container"]:checked');
+            var value = selected ? selected.value : 'zip';
+
+            lnkForm.querySelectorAll('[data-container-option]').forEach(function (option) {
+                var input = option.querySelector('input[name="lnk_container"]');
+                option.classList.toggle('is-active', !!input && input.checked);
+            });
+
+            if (passwordBox) {
+                passwordBox.classList.toggle('is-muted', value !== 'iso_zip');
+            }
+
+            if (lnkPreview) {
+                var base = lnkPreview.getAttribute('data-preview-base') || '';
+                var outer = lnkPreview.querySelector('[data-lnk-outer]');
+                var inner = lnkPreview.querySelector('[data-lnk-inner]');
+                if (outer) {
+                    outer.textContent = value === 'iso' ? base + '.iso' : base + '.zip';
+                }
+                if (inner) {
+                    if (value === 'iso_zip') {
+                        var hasPassword = passwordInput && passwordInput.value.trim();
+                        inner.textContent = '（内嵌 ' + base + '.iso' + (hasPassword ? '，AES 加密' : '') + '）';
+                    } else {
+                        inner.textContent = '';
+                    }
+                }
+            }
+        };
+
+        lnkForm.addEventListener('change', function (event) {
+            if (event.target.matches('input[name="lnk_container"]')) {
+                syncContainer();
+            }
+        });
+        if (passwordInput) {
+            passwordInput.addEventListener('input', syncContainer);
+        }
+        syncContainer();
+    }
+
+    /* ---- ClickFix landing preview ---- */
+    var landingToggle = document.querySelector('[data-landing-toggle]');
+    if (landingToggle) {
+        var landingFrame = document.querySelector('[data-landing-frame]');
+        var landingBadge = document.querySelector('[data-landing-badge]');
+        var landingBadgeText = document.querySelector('[data-landing-badge-text]');
+
+        var syncLanding = function () {
+            var enabled = landingToggle.checked;
+            if (landingFrame) {
+                landingFrame.classList.toggle('is-off', !enabled);
+            }
+            if (landingBadge) {
+                landingBadge.classList.toggle('is-off', !enabled);
+            }
+            if (landingBadgeText) {
+                landingBadgeText.textContent = enabled ? '已启用' : '未启用';
+            }
+        };
+
+        landingToggle.addEventListener('change', syncLanding);
+        syncLanding();
+    }
+
     /* ---- Public helpers ---- */
     function setThemePersisted(theme) {
         if (theme === 'light' || theme === 'dark') {

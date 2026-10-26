@@ -64,21 +64,33 @@ PIP_INDEX_URL=https://pypi.tuna.tsinghua.edu.cn/simple bash install_fish.sh
 FUZZTEAM_FISH_MANAGE_PORT=8000 FUZZTEAM_FISH_LISTEN_PORT=9000 bash install_fish.sh
 
 # 查看管理面板地址（部署脚本也会直接打印）
-docker logs fuzzteam-fish
+docker logs drill-platform
 ```
+
+> 国内服务器通常无法直连 Docker Hub，若部署时卡在拉取 `python:3.8-slim`，请先配置镜像加速：
+>
+> ```bash
+> mkdir -p /etc/docker
+> cat > /etc/docker/daemon.json <<'EOF'
+> {"registry-mirrors": ["https://docker.m.daocloud.io"]}
+> EOF
+> systemctl restart docker
+> ```
+>
+> 镜像源可用性会变化，如失效请替换为其他 Docker Hub 加速地址。
 
 ### 环境变量
 
-| 变量                        | 默认值          | 说明             |
-| --------------------------- | --------------- | ---------------- |
-| `FUZZTEAM_FISH_CONTAINER`   | `fuzzteam-fish` | 容器名称         |
-| `FUZZTEAM_FISH_IMAGE`       | `fuzzteam-fish` | 镜像名称         |
-| `FUZZTEAM_FISH_MANAGE_PORT` | `5000`          | 管理面板端口     |
-| `FUZZTEAM_FISH_LISTEN_PORT` | `8080`          | EXE 回传数据端口 |
-| `FUZZTEAM_FISH_DATA`        | `./data`        | 数据库持久化目录 |
-| `FUZZTEAM_FISH_UPLOADS`     | `./uploads`     | 截图上传目录     |
-| `FUZZTEAM_FISH_OUTPUT`      | `./output`      | 生成文件输出目录 |
-| `PIP_INDEX_URL`             | 空              | pip 镜像源地址   |
+| 变量                        | 默认值           | 说明             |
+| --------------------------- | ---------------- | ---------------- |
+| `FUZZTEAM_FISH_CONTAINER`   | `drill-platform` | 容器名称         |
+| `FUZZTEAM_FISH_IMAGE`       | `drill-platform` | 镜像名称         |
+| `FUZZTEAM_FISH_MANAGE_PORT` | `5000`           | 管理面板端口     |
+| `FUZZTEAM_FISH_LISTEN_PORT` | `8080`           | EXE 回传数据端口 |
+| `FUZZTEAM_FISH_DATA`        | `./data`         | 数据库持久化目录 |
+| `FUZZTEAM_FISH_UPLOADS`     | `./uploads`      | 截图上传目录     |
+| `FUZZTEAM_FISH_OUTPUT`      | `./output`       | 生成文件输出目录 |
+| `PIP_INDEX_URL`             | 空               | pip 镜像源地址（也兼容 `FUZZTEAM_PIP_INDEX_URL`） |
 
 ## 系统使用
 
@@ -197,6 +209,8 @@ http://<回传地址>:<回传端口>/p/<token>
 
 实现备注与限制：
 
+- 落地页内置 UA 门槛：仅主流浏览器 UA 正常返回页面，脚本、扫描器、无 UA 或 Headless 请求得到伪装成 nginx 的 404 页面，且不记录访问埋点
+- 回传端与管理端的 HTTP 响应统一伪装：状态行使用 HTTP/1.1，`Server` 头固定为 `nginx`，不暴露 Werkzeug / Python 版本指纹
 - HTA 由 `mshta.exe` 执行，部分终端安全策略或 EDR 会拦截 HTA / PowerShell
 - 远程 HTA 运行在 Internet 安全区域，`ADODB.Stream` 等组件写文件会被拦截，因此下载动作交由 PowerShell 完成
 - 请勿在 `landing.hta` 中添加 `X-UA-Compatible IE=edge` 元标签，该标签会导致 Windows 11 下 VBScript 不执行

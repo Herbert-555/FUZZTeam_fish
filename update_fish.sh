@@ -2,14 +2,14 @@
 set -euo pipefail
 
 PROJECT_ROOT="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
-CONTAINER_NAME="${FUZZTEAM_FISH_CONTAINER:-fuzzteam-fish}"
-IMAGE_NAME="${FUZZTEAM_FISH_IMAGE:-fuzzteam-fish}"
+CONTAINER_NAME="${FUZZTEAM_FISH_CONTAINER:-drill-platform}"
+IMAGE_NAME="${FUZZTEAM_FISH_IMAGE:-drill-platform}"
 MANAGE_PORT="${FUZZTEAM_FISH_MANAGE_PORT:-5000}"
 LISTEN_PORT="${FUZZTEAM_FISH_LISTEN_PORT:-8080}"
 DATA_DIR="${FUZZTEAM_FISH_DATA:-$PROJECT_ROOT/data}"
 UPLOADS_DIR="${FUZZTEAM_FISH_UPLOADS:-$PROJECT_ROOT/uploads}"
 OUTPUT_DIR="${FUZZTEAM_FISH_OUTPUT:-$PROJECT_ROOT/output}"
-PIP_INDEX_URL="${FUZZTEAM_PIP_INDEX_URL:-https://pypi.tuna.tsinghua.edu.cn/simple}"
+PIP_INDEX_URL="${PIP_INDEX_URL:-${FUZZTEAM_PIP_INDEX_URL:-https://pypi.tuna.tsinghua.edu.cn/simple}}"
 STOP_TIMEOUT="${FUZZTEAM_FISH_STOP_TIMEOUT:-30}"
 BACKUP_DIR="${FUZZTEAM_FISH_BACKUP:-$PROJECT_ROOT/backups}"
 BACKUP_ENABLED="${FUZZTEAM_FISH_BACKUP_ENABLED:-true}"
@@ -21,7 +21,7 @@ fail() { printf '[-] %s\n' "$*" >&2; exit 1; }
 need_cmd() { command -v "$1" >/dev/null 2>&1 || fail "未找到命令: $1"; }
 
 need_cmd docker
-[ -f "$PROJECT_ROOT/run.py" ] || fail "请在 FUZZTeam_getfish 项目根目录运行"
+[ -f "$PROJECT_ROOT/run.py" ] || fail "请在项目根目录运行"
 [ -f "$PROJECT_ROOT/requirements.txt" ] || fail "未找到 requirements.txt"
 
 for d in "$DATA_DIR" "$UPLOADS_DIR" "$OUTPUT_DIR"; do
@@ -71,6 +71,11 @@ else
 fi
 
 # --- 重建镜像 ---
+if ! docker image inspect python:3.8-slim >/dev/null 2>&1; then
+    log "拉取基础镜像: python:3.8-slim"
+    docker pull python:3.8-slim || fail "基础镜像拉取失败，请先配置 Docker 镜像加速（见 README「Docker 部署」）"
+fi
+
 log "构建 Docker 镜像: $IMAGE_NAME"
 docker build \
     --build-arg PIP_INDEX_URL="$PIP_INDEX_URL" \
@@ -84,16 +89,19 @@ docker run -d \
     --restart unless-stopped \
     -p "0.0.0.0:$MANAGE_PORT:5000" \
     -p "0.0.0.0:$LISTEN_PORT:8080" \
-    -v "$DATA_DIR:/FUZZTeam_getfish/data" \
-    -v "$UPLOADS_DIR:/FUZZTeam_getfish/uploads" \
-    -v "$OUTPUT_DIR:/FUZZTeam_getfish/output" \
+    -v "$DATA_DIR:/app/data" \
+    -v "$UPLOADS_DIR:/app/uploads" \
+    -v "$OUTPUT_DIR:/app/output" \
     "$IMAGE_NAME" \
     --host 0.0.0.0
 
 # --- 等待服务启动 ---
 log "等待 Web 服务启动"
 ADMIN_URL=""
-SERVER_IP=$(curl -s --connect-timeout 3 "$SERVER_IP_URL" 2>/dev/null || echo '')
+SERVER_IP=$(curl -s --connect-timeout 3 "$SERVER_IP_URL" 2>/dev/null || true)
+if [ -z "$SERVER_IP" ]; then
+    SERVER_IP=$(curl -s --connect-timeout 3 https://ip.sb 2>/dev/null || true)
+fi
 for _ in $(seq 1 60); do
     ADMIN_URL=$(docker logs "$CONTAINER_NAME" 2>&1 | sed -n 's/.*管理面板: *\(http:\/\/[^ ]*\).*/\1/p')
     if [ -n "$ADMIN_URL" ]; then

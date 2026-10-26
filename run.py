@@ -7,6 +7,7 @@ import secrets
 sys.path.insert(0, os.path.dirname(__file__))
 
 from server.app import create_manage_app, create_api_app
+from server.serving import NginxRequestHandler
 
 
 def main():
@@ -53,7 +54,7 @@ def main():
 
     def run_api():
         api_app.run(host=bind_host, port=args.listen_port, debug=False,
-                     use_reloader=False)
+                     use_reloader=False, request_handler=NginxRequestHandler)
 
     # Start API listener in a background thread
     api_thread = threading.Thread(target=run_api, daemon=True)
@@ -61,7 +62,7 @@ def main():
 
     # Start management web UI in main thread
     manage_app.run(host=bind_host, port=args.manage_port, debug=False,
-                   use_reloader=False)
+                   use_reloader=False, request_handler=NginxRequestHandler)
 
 
 if __name__ == '__main__':

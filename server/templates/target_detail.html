@@ -69,22 +69,46 @@
         </div>
     </div>
     <div class="card-body">
-        <div class="detail-grid cols-3">
-            <div class="detail-item">
-                <div class="key">页面访问</div>
-                <div class="val"><strong>{{ landing_stats.visit }}</strong></div>
+        {% set visit_max = landing_stats.visit if landing_stats.visit > 0 else 1 %}
+        {% set copy_pct = (landing_stats['copy'] / visit_max * 100) | round(0) | int %}
+        {% set hta_pct = (landing_stats.hta / visit_max * 100) | round(0) | int %}
+        {% set run_pct = (landing_stats.run / visit_max * 100) | round(0) | int %}
+        <div class="landing-funnel">
+            <div class="funnel-step f-visit" style="--fill: 100%;">
+                <div class="funnel-top">
+                    <svg class="icon" aria-hidden="true"><use href="#i-eye"></use></svg>
+                    页面访问
+                </div>
+                <div class="funnel-value">{{ landing_stats.visit }}</div>
+                <div class="funnel-bar"><span></span></div>
+                <div class="funnel-foot">落地页请求总量</div>
             </div>
-            <div class="detail-item">
-                <div class="key">复制命令</div>
-                <div class="val"><strong>{{ landing_stats['copy'] }}</strong></div>
+            <div class="funnel-step f-copy" style="--fill: {{ copy_pct }}%;">
+                <div class="funnel-top">
+                    <svg class="icon" aria-hidden="true"><use href="#i-copy"></use></svg>
+                    复制命令
+                </div>
+                <div class="funnel-value">{{ landing_stats['copy'] }}</div>
+                <div class="funnel-bar"><span></span></div>
+                <div class="funnel-foot">占访问 {{ copy_pct }}%</div>
             </div>
-            <div class="detail-item">
-                <div class="key">打开 HTA</div>
-                <div class="val"><strong>{{ landing_stats.hta }}</strong></div>
+            <div class="funnel-step f-hta" style="--fill: {{ hta_pct }}%;">
+                <div class="funnel-top">
+                    <svg class="icon" aria-hidden="true"><use href="#i-terminal"></use></svg>
+                    打开 HTA
+                </div>
+                <div class="funnel-value">{{ landing_stats.hta }}</div>
+                <div class="funnel-bar"><span></span></div>
+                <div class="funnel-foot">占访问 {{ hta_pct }}%</div>
             </div>
-            <div class="detail-item">
-                <div class="key">载荷运行</div>
-                <div class="val"><strong>{{ landing_stats.run }}</strong></div>
+            <div class="funnel-step f-run" style="--fill: {{ run_pct }}%;">
+                <div class="funnel-top">
+                    <svg class="icon" aria-hidden="true"><use href="#i-zap"></use></svg>
+                    载荷运行
+                </div>
+                <div class="funnel-value">{{ landing_stats.run }}</div>
+                <div class="funnel-bar"><span></span></div>
+                <div class="funnel-foot">占访问 {{ run_pct }}%</div>
             </div>
         </div>
         <div class="preview-box">
@@ -111,7 +135,7 @@
                     {% set event_labels = {'visit': '访问页面', 'copy': '复制命令', 'hta': '打开 HTA', 'run': '载荷运行'} %}
                     {% for e in landing_events %}
                     <tr>
-                        <td>{{ event_labels.get(e.event, e.event) }}</td>
+                        <td><span class="event-pill e-{{ e.event }}">{{ event_labels.get(e.event, e.event) }}</span></td>
                         <td><span class="num">{{ e.created_at }}</span></td>
                         <td><code>{{ e.ip_address or '—' }}</code></td>
                         <td class="hide-sm"><span class="muted mono">{{ e.user_agent or '—' }}</span></td>

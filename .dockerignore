@@ -1,0 +1,15 @@
+.git
+.github
+.gitignore
+client_build
+data
+uploads
+output
+backups
+preview
+README.assets
+__pycache__
+*.py[cod]
+*.log
+.venv
+venv

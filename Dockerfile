@@ -1,6 +1,6 @@
 FROM python:3.8-slim
 
-WORKDIR /FUZZTeam_getfish
+WORKDIR /app
 
 ARG PIP_INDEX_URL=""
 
@@ -15,7 +15,7 @@ RUN if [ -n "$PIP_INDEX_URL" ]; then \
 
 COPY . .
 
-VOLUME ["/FUZZTeam_getfish/data", "/FUZZTeam_getfish/uploads", "/FUZZTeam_getfish/output"]
+VOLUME ["/app/data", "/app/uploads", "/app/output"]
 
 EXPOSE 5000 8080
 

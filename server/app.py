@@ -7,6 +7,14 @@ from .routes import routes_web, routes_api
 BASE_DIR = os.path.dirname(os.path.dirname(__file__))
 
 
+def _disguise_headers(app):
+    @app.after_request
+    def _spoof_server(response):
+        response.headers['Server'] = 'nginx'
+        response.headers.pop('X-Powered-By', None)
+        return response
+
+
 def _ensure_dirs():
     for d in ['data', 'uploads', 'output', 'client_build']:
         os.makedirs(os.path.join(BASE_DIR, d), exist_ok=True)
@@ -26,6 +34,7 @@ def create_manage_app(admin_path=''):
 
     prefix = f'/{admin_path}' if admin_path else '/fishfish'
     app.register_blueprint(routes_web, url_prefix=prefix)
+    _disguise_headers(app)
 
     @app.context_processor
     def inject_admin_path():
@@ -44,5 +53,6 @@ def create_api_app():
         init_db()
 
     app.register_blueprint(routes_api)
+    _disguise_headers(app)
 
     return app

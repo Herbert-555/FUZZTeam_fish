@@ -74,7 +74,7 @@
                     <th>Token</th>
                     <th>状态</th>
                     <th>点击</th>
-                    <th>落地页</th>
+                    {% if landing_enabled %}<th>落地页</th>{% endif %}
                     <th class="hide-sm">创建时间</th>
                     <th>操作</th>
                 </tr>
@@ -111,15 +111,19 @@
                         {% endif %}
                     </td>
                     <td class="num">{{ t.callback_count }}</td>
+                    {% if landing_enabled %}
                     <td>
-                        <button class="copy-chip" type="button" data-copy="{{ t.landing_url }}" title="复制 ClickFix 落地页链接">
-                            <svg class="icon" aria-hidden="true"><use href="#i-globe"></use></svg>
-                            <span>复制链接</span>
-                        </button>
-                        {% if t.landing_visits %}
-                        <span class="badge badge-muted" title="落地页访问次数">{{ t.landing_visits }} 次访问</span>
-                        {% endif %}
+                        <div class="landing-cell">
+                            <button class="copy-chip" type="button" data-copy="{{ t.landing_url }}" title="复制 ClickFix 落地页链接">
+                                <svg class="icon" aria-hidden="true"><use href="#i-globe"></use></svg>
+                                <span>落地页</span>
+                            </button>
+                            <span class="visit-pill{% if t.landing_visits %} is-live{% endif %}" title="落地页访问次数">
+                                {% if t.landing_visits %}<span class="pulse-dot"></span>{% endif %}{{ t.landing_visits or 0 }}
+                            </span>
+                        </div>
                     </td>
+                    {% endif %}
                     <td class="hide-sm"><span class="num">{{ t.created_at }}</span></td>
                     <td>
                         <div class="row-actions">

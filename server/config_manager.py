@@ -15,7 +15,7 @@ DEFAULT_CONFIG = {
     'server_host': '127.0.0.1',
     'server_port': 8080,
     'lnk_lure_ext': 'pdf',
-    'lnk_evasion': [],
+    'lnk_evasion': ['conhost'],
     'lnk_container': 'zip',
     'lnk_zip_password': '',
     'landing_enabled': True,

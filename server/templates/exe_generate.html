@@ -184,11 +184,20 @@
                     <td><span class="mono">{{ f.name }}</span></td>
                     <td>
                         {% if f.kind == 'lnk' %}
-                        <span class="badge badge-muted"><span class="dot"></span>LNK 包</span>
+                        <span class="file-kind f-lnk">
+                            <svg class="icon" aria-hidden="true"><use href="#i-archive"></use></svg>
+                            LNK 包
+                        </span>
                         {% elif f.kind == 'iso' %}
-                        <span class="badge badge-muted"><span class="dot"></span>ISO 镜像</span>
+                        <span class="file-kind f-iso">
+                            <svg class="icon" aria-hidden="true"><use href="#i-hard-drive"></use></svg>
+                            ISO 镜像
+                        </span>
                         {% else %}
-                        <span class="badge badge-muted"><span class="dot"></span>EXE</span>
+                        <span class="file-kind f-exe">
+                            <svg class="icon" aria-hidden="true"><use href="#i-file"></use></svg>
+                            EXE
+                        </span>
                         {% endif %}
                     </td>
                     <td>
