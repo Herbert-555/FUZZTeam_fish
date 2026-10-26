@@ -1746,6 +1746,68 @@ input[type="checkbox"] {
     color: var(--success);
 }
 
+.evasion-record {
+    margin-top: 14px;
+}
+
+.evasion-record-title {
+    display: block;
+    margin-bottom: 6px;
+    color: var(--ink-tertiary);
+    font-size: 11.5px;
+}
+
+.evasion-option.is-record {
+    cursor: default;
+    background: var(--surface-1);
+    border-style: dashed;
+}
+
+.evasion-record-dot {
+    flex: 0 0 auto;
+    width: 6px;
+    height: 6px;
+    margin: 6px 0 0 4px;
+    border-radius: 50%;
+    background: var(--danger);
+}
+
+.test-records {
+    margin-top: 12px;
+    padding-top: 10px;
+    border-top: 1px dashed var(--hairline);
+}
+
+.test-records summary {
+    cursor: pointer;
+    color: var(--ink-tertiary);
+    font-size: 11.5px;
+}
+
+.test-record-list {
+    display: flex;
+    flex-direction: column;
+    gap: 5px;
+    margin-top: 8px;
+}
+
+.test-record-row {
+    display: flex;
+    align-items: baseline;
+    gap: 8px;
+    font-size: 12px;
+}
+
+.test-record-row code {
+    min-width: 210px;
+    color: var(--ink-muted);
+    font-size: 11.5px;
+}
+
+.test-record-row .muted {
+    font-size: 11.5px;
+}
+
 .evasion-option.is-bad .evasion-note {
     color: var(--danger);
 }

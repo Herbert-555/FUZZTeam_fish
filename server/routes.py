@@ -1031,7 +1031,10 @@ def exe_config():
 
     config = load_config()
     preview = config['name_template'].replace('{name}', '张三').replace('{token8}', 'a1b2c3d4').replace('{token}', 'a1b2c3d4-xxxx-xxxx-xxxx-xxxxxxxxxxxx')
-    from .lnk_builder import LURE_EXT_CHOICES, EVASION_OPTIONS, EVASION_RESULTS, CONTAINER_CHOICES
+    from .lnk_builder import (
+        LURE_EXT_CHOICES, EVASION_OPTIONS, EVASION_RESULTS, EVASION_REJECTED,
+        LAUNCHER_RESULTS, CONTAINER_CHOICES,
+    )
     lure_ext = config.get('lnk_lure_ext', 'pdf')
     container = config.get('lnk_container', 'zip')
     lnk_preview = f'{preview}.iso' if container == 'iso' else f'{preview}.zip'
@@ -1047,6 +1050,8 @@ def exe_config():
         lure_ext_choices=LURE_EXT_CHOICES,
         evasion_options=EVASION_OPTIONS,
         evasion_results=EVASION_RESULTS,
+        evasion_rejected=EVASION_REJECTED,
+        launcher_results=LAUNCHER_RESULTS,
         container_choices=CONTAINER_CHOICES,
         lnk_evasion=config.get('lnk_evasion', []),
     )
