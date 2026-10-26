@@ -1,6 +1,8 @@
 import os
 import json
 
+from .extensions import get_extension
+
 BASE_DIR = os.path.dirname(os.path.dirname(__file__))
 CONFIG_PATH = os.path.join(BASE_DIR, 'data', 'exe_config.json')
 ICONS_DIR = os.path.join(BASE_DIR, 'output', 'icons')
@@ -14,12 +16,11 @@ DEFAULT_CONFIG = {
     'popup_message': 'xx公司员工安全意识测试，如有疑问请联系省公司安全部门/信息科',
     'server_host': '127.0.0.1',
     'server_port': 8080,
-    'lnk_lure_ext': 'pdf',
-    'lnk_evasion': ['conhost'],
-    'lnk_container': 'zip',
-    'lnk_zip_password': '',
-    'landing_enabled': True,
 }
+
+_extension = get_extension()
+if _extension:
+    DEFAULT_CONFIG.update(_extension.config_defaults())
 
 
 def load_config():

@@ -1,0 +1,45 @@
+#!/usr/bin/env bash
+# Refuse to push AV-bypass code (bypass/) to the public FUZZTeam_fish repository.
+# The private bypass build pushes to FUZZTeam_fish_bypassAV instead.
+set -euo pipefail
+
+remote_url="${2:-}"
+zero="0000000000000000000000000000000000000000"
+
+case "$remote_url" in
+    *FUZZTeam_fish.git) ;;
+    *) exit 0 ;;
+esac
+
+blocked=0
+
+block() {
+    printf '\n[pre-push] 拒绝推送: %s\n' "$1" >&2
+    printf '[pre-push] 免杀代码只能推送到 FUZZTeam_fish_bypassAV。\n\n' >&2
+    blocked=1
+}
+
+while read -r local_ref local_sha remote_ref remote_sha; do
+    [ "$local_sha" = "$zero" ] && continue
+
+    case "$local_ref" in
+        refs/heads/bypass*)
+            block "分支 $local_ref 不允许推送到公开仓库"
+            continue
+            ;;
+    esac
+
+    if git ls-tree -r --name-only "$local_sha" 2>/dev/null | grep -q '^bypass/'; then
+        block "$local_ref 的提交内容包含 bypass/ 目录"
+        continue
+    fi
+
+    if [ "$remote_sha" != "$zero" ] && git cat-file -e "${remote_sha}^{commit}" 2>/dev/null; then
+        if [ -n "$(git log --format=%H "$remote_sha..$local_sha" -- bypass/)" ]; then
+            block "$local_ref 包含修改 bypass/ 的提交"
+            continue
+        fi
+    fi
+done
+
+exit "$blocked"

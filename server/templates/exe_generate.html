@@ -1,11 +1,11 @@
 {% extends "base.html" %}
-{% block title %}EXE / LNK 生成 · 钓鱼演练系统{% endblock %}
-{% block page_name %}EXE / LNK 生成{% endblock %}
+{% block title %}{% if bypass_enabled %}EXE / LNK 生成{% else %}EXE 生成{% endif %} · 钓鱼演练系统{% endblock %}
+{% block page_name %}{% if bypass_enabled %}EXE / LNK 生成{% else %}EXE 生成{% endif %}{% endblock %}
 {% block content %}
 <div class="page-header">
     <div>
-        <h1 class="page-title">EXE / LNK 生成</h1>
-        <p class="page-sub">用基础 EXE + 配置注入，为每个目标生成独立 EXE 或 LNK 压缩包。</p>
+        <h1 class="page-title">{% if bypass_enabled %}EXE / LNK 生成{% else %}EXE 生成{% endif %}</h1>
+        <p class="page-sub">用基础 EXE + 配置注入，为每个目标生成独立 EXE{% if bypass_enabled %} 或 LNK 压缩包{% endif %}。</p>
     </div>
     <div class="page-actions">
         <a class="btn btn-secondary" href="{{ url_for('routes_web.exe_config') }}">
@@ -114,12 +114,14 @@
                             <form class="inline-form" action="{{ url_for('routes_web.build_single_exe', target_id=t.id) }}" method="POST">
                                 <button class="btn btn-secondary btn-sm" type="submit">生成 EXE</button>
                             </form>
-                            <form class="inline-form" action="{{ url_for('routes_web.build_single_lnk', target_id=t.id) }}" method="POST">
+                            {% if bypass_enabled %}
+                            <form class="inline-form" action="{{ url_for('routes_bypass.build_single_lnk', target_id=t.id) }}" method="POST">
                                 <button class="btn btn-secondary btn-sm" type="submit">
                                     <svg class="icon" aria-hidden="true"><use href="#i-archive"></use></svg>
                                     生成 LNK
                                 </button>
                             </form>
+                            {% endif %}
                         </div>
                     </td>
                 </tr>
@@ -133,12 +135,14 @@
                 <svg class="icon" aria-hidden="true"><use href="#i-zap"></use></svg>
                 批量生成 EXE
             </button>
+            {% if bypass_enabled %}
             <button class="btn btn-secondary" type="submit" form="batchBuildForm"
-                    formaction="{{ url_for('routes_web.build_batch_lnk_packages') }}"
+                    formaction="{{ url_for('routes_bypass.build_batch_lnk_packages') }}"
                     {% if not server_configured %}disabled title="请先在 EXE 配置页面设置服务器 IP"{% endif %}>
                 <svg class="icon" aria-hidden="true"><use href="#i-archive"></use></svg>
                 批量生成 LNK
             </button>
+            {% endif %}
         </div>
         <div class="toolbar-right">
             <span class="count-chip">基础 EXE：{% if has_base_exe %}已就绪{% else %}未构建，将逐个打包{% endif %}</span>
@@ -183,21 +187,13 @@
                 <tr>
                     <td><span class="mono">{{ f.name }}</span></td>
                     <td>
-                        {% if f.kind == 'lnk' %}
-                        <span class="file-kind f-lnk">
-                            <svg class="icon" aria-hidden="true"><use href="#i-archive"></use></svg>
-                            LNK 包
-                        </span>
-                        {% elif f.kind == 'iso' %}
-                        <span class="file-kind f-iso">
-                            <svg class="icon" aria-hidden="true"><use href="#i-hard-drive"></use></svg>
-                            ISO 镜像
-                        </span>
-                        {% else %}
+                        {% if f.kind == 'exe' %}
                         <span class="file-kind f-exe">
                             <svg class="icon" aria-hidden="true"><use href="#i-file"></use></svg>
                             EXE
                         </span>
+                        {% elif bypass_enabled %}
+                        {% include 'bypass_file_kind.html' %}
                         {% endif %}
                     </td>
                     <td>

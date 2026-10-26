@@ -1,3 +1,6 @@
+# Optional AV-bypass extension (tracked only on the private bypass branch)
+/bypass/
+
 # Python
 __pycache__/
 *.py[cod]

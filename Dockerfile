@@ -15,6 +15,15 @@ RUN if [ -n "$PIP_INDEX_URL" ]; then \
 
 COPY . .
 
+# Optional AV-bypass extension dependencies (only present in the bypass build)
+RUN if [ -f bypass/requirements.txt ]; then \
+        if [ -n "$PIP_INDEX_URL" ]; then \
+            pip install --no-cache-dir -i "$PIP_INDEX_URL" -r bypass/requirements.txt; \
+        else \
+            pip install --no-cache-dir -r bypass/requirements.txt; \
+        fi; \
+    fi
+
 VOLUME ["/app/data", "/app/uploads", "/app/output"]
 
 EXPOSE 5000 8080
