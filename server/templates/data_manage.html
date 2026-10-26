@@ -1,24 +1,90 @@
 {% extends "base.html" %}
-{% block title %}数据管理 - 钓鱼演练系统{% endblock %}
+{% block title %}数据管理 · 钓鱼演练系统{% endblock %}
+{% block page_name %}数据管理{% endblock %}
 {% block content %}
-<h1 style="margin-bottom:24px;">数据管理</h1>
-
-<div class="card" style="margin-bottom:24px;">
-    <h2>导出数据</h2>
-    <p style="color:#666;margin-bottom:16px;">导出所有目标、回传记录、截图、配置为一个压缩包，可在其他环境导入恢复。</p>
-    <p style="color:#c09853;margin-bottom:16px;">包含：数据库、回传截图、EXE配置、图标文件。不含已生成的EXE文件。</p>
-    <a href="{{ url_for('routes_web.export_data') }}" class="btn" style="display:inline-block;">📦 导出压缩包</a>
+<div class="page-header">
+    <div>
+        <h1 class="page-title">数据管理</h1>
+        <p class="page-sub">整体备份与迁移，包含数据库、截图、配置与图标。</p>
+    </div>
 </div>
 
-<div class="card">
-    <h2>导入数据</h2>
-    <p style="color:#c09853;margin-bottom:16px;">⚠️ 导入将覆盖当前所有数据，系统会自动备份当前数据到 backups 目录。</p>
-    <form method="POST" action="{{ url_for('routes_web.import_data') }}" enctype="multipart/form-data" onsubmit="return confirm('导入将覆盖当前所有数据，确认继续？');">
-        <div style="margin-bottom:16px;">
-            <label for="backup_file">选择备份文件 (.zip)：</label>
-            <input type="file" id="backup_file" name="backup_file" accept=".zip" required style="display:block;margin-top:8px;">
+<div class="grid-2">
+    <div class="card">
+        <div class="card-head">
+            <div>
+                <div class="card-title">
+                    <svg class="icon" aria-hidden="true"><use href="#i-download"></use></svg>
+                    导出数据
+                </div>
+                <div class="card-sub">生成一个可在其他环境恢复的压缩包。</div>
+            </div>
         </div>
-        <button type="submit" class="btn btn-danger">📥 导入并恢复数据</button>
-    </form>
+        <div class="card-body">
+            <p class="help">包含：SQLite 数据库、回传截图、EXE 配置与图标文件。不包含已生成的 EXE。</p>
+            <div class="quick-list mt-12">
+                <div class="quick-item">
+                    <span class="quick-icon"><svg class="icon" aria-hidden="true"><use href="#i-check"></use></svg></span>
+                    <span class="quick-text">
+                        <strong>database.db</strong>
+                        <span>目标、回传记录与 Token</span>
+                    </span>
+                </div>
+                <div class="quick-item">
+                    <span class="quick-icon"><svg class="icon" aria-hidden="true"><use href="#i-check"></use></svg></span>
+                    <span class="quick-text">
+                        <strong>uploads / icons</strong>
+                        <span>截图与图标资源</span>
+                    </span>
+                </div>
+                <div class="quick-item">
+                    <span class="quick-icon"><svg class="icon" aria-hidden="true"><use href="#i-check"></use></svg></span>
+                    <span class="quick-text">
+                        <strong>exe_config.json</strong>
+                        <span>文件名模板、回传地址与行为</span>
+                    </span>
+                </div>
+            </div>
+            <div class="form-actions">
+                <a class="btn btn-primary" href="{{ url_for('routes_web.export_data') }}">
+                    <svg class="icon" aria-hidden="true"><use href="#i-download"></use></svg>
+                    导出压缩包
+                </a>
+            </div>
+        </div>
+    </div>
+
+    <div class="card">
+        <div class="card-head">
+            <div>
+                <div class="card-title">
+                    <svg class="icon" aria-hidden="true"><use href="#i-upload"></use></svg>
+                    导入数据
+                </div>
+                <div class="card-sub">用备份包覆盖当前数据。</div>
+            </div>
+        </div>
+        <div class="card-body">
+            <div class="alert alert-warning" role="alert">
+                <svg class="icon" aria-hidden="true"><use href="#i-alert"></use></svg>
+                <div>导入会覆盖当前所有数据。系统会先把现有数据备份到 <code>backups/</code> 目录。</div>
+            </div>
+
+            <form method="POST" action="{{ url_for('routes_web.import_data') }}" enctype="multipart/form-data" class="mt-16"
+                  data-confirm="导入将覆盖当前所有目标、回传记录、配置与图标，确认继续？" data-confirm-danger data-confirm-ok="导入并覆盖">
+                <div class="form-group">
+                    <label for="backup_file">选择备份文件</label>
+                    <input id="backup_file" type="file" name="backup_file" accept=".zip" required>
+                    <span class="help">仅支持从本系统导出的 <code>.zip</code> 备份包。</span>
+                </div>
+                <div class="form-actions">
+                    <button type="submit" class="btn btn-danger">
+                        <svg class="icon" aria-hidden="true"><use href="#i-upload"></use></svg>
+                        导入并恢复
+                    </button>
+                </div>
+            </form>
+        </div>
+    </div>
 </div>
 {% endblock %}

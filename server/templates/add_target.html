@@ -1,30 +1,93 @@
 {% extends "base.html" %}
-{% block title %}添加目标 - 钓鱼演练系统{% endblock %}
+{% block title %}添加目标 · 钓鱼演练系统{% endblock %}
+{% block page_name %}添加目标{% endblock %}
 {% block content %}
-<h1 style="margin-bottom:16px;">添加目标</h1>
+<div class="page-header">
+    <div>
+        <h1 class="page-title">添加目标</h1>
+        <p class="page-sub">录入单个演练目标，Token 会在保存时自动生成。</p>
+    </div>
+    <div class="page-actions">
+        <a class="btn btn-secondary" href="{{ url_for('routes_web.targets') }}">
+            <svg class="icon" aria-hidden="true"><use href="#i-arrow-left"></use></svg>
+            返回列表
+        </a>
+    </div>
+</div>
 
-<div class="card">
-    <form method="POST">
-        <div class="form-group">
-            <label>姓名 *</label>
-            <input type="text" name="name" placeholder="目标姓名" required>
+<div class="grid-2-1">
+    <div class="card">
+        <div class="card-head">
+            <div class="card-title">
+                <svg class="icon" aria-hidden="true"><use href="#i-user"></use></svg>
+                目标信息
+            </div>
         </div>
-        <div class="form-group">
-            <label>邮箱</label>
-            <input type="email" name="email" placeholder="target@company.com">
+        <div class="card-body">
+            <form method="POST">
+                <div class="form-grid">
+                    <div class="form-group">
+                        <label for="name">姓名 <span class="required">*</span></label>
+                        <input id="name" type="text" name="name" placeholder="目标姓名" required>
+                    </div>
+                    <div class="form-group">
+                        <label for="email">邮箱</label>
+                        <input id="email" type="email" name="email" placeholder="target@company.com">
+                    </div>
+                    <div class="form-group">
+                        <label for="department">部门</label>
+                        <input id="department" type="text" name="department" placeholder="如：技术部">
+                    </div>
+                    <div class="form-group">
+                        <label for="exe_filename">EXE 文件名</label>
+                        <input id="exe_filename" type="text" name="exe_filename" placeholder="留空则使用统一名称模板">
+                        <span class="help">不需要填写 <code>.exe</code> 后缀。</span>
+                    </div>
+                </div>
+                <div class="form-actions">
+                    <button type="submit" class="btn btn-primary">
+                        <svg class="icon" aria-hidden="true"><use href="#i-plus"></use></svg>
+                        添加目标
+                    </button>
+                    <a class="btn btn-secondary" href="{{ url_for('routes_web.targets') }}">取消</a>
+                </div>
+            </form>
         </div>
-        <div class="form-group">
-            <label>部门</label>
-            <input type="text" name="department" placeholder="如：技术部">
+    </div>
+
+    <aside class="card">
+        <div class="card-head">
+            <div class="card-title">
+                <svg class="icon" aria-hidden="true"><use href="#i-info"></use></svg>
+                说明
+            </div>
         </div>
-        <div class="form-group">
-            <label>EXE文件名</label>
-            <input type="text" name="exe_filename" placeholder="为空时使用统一名称模板，不需要填写 .exe">
+        <div class="card-body">
+            <div class="quick-list">
+                <div class="quick-item">
+                    <span class="quick-icon"><svg class="icon" aria-hidden="true"><use href="#i-key"></use></svg></span>
+                    <span class="quick-text">
+                        <strong>Token 自动生成</strong>
+                        <span>用于绑定 EXE 与回传数据</span>
+                    </span>
+                </div>
+                <div class="quick-item">
+                    <span class="quick-icon"><svg class="icon" aria-hidden="true"><use href="#i-file"></use></svg></span>
+                    <span class="quick-text">
+                        <strong>文件名可留空</strong>
+                        <span>按 EXE 配置中的模板生成</span>
+                    </span>
+                </div>
+                <div class="quick-item">
+                    <span class="quick-icon"><svg class="icon" aria-hidden="true"><use href="#i-box"></use></svg></span>
+                    <span class="quick-text">
+                        <strong>添加后生成 EXE</strong>
+                        <span>在目标管理或 EXE 生成页操作</span>
+                    </span>
+                </div>
+            </div>
+            <div class="sidebar-note">请确认目标已授权参与本次安全意识演练。</div>
         </div>
-        <div class="btn-group">
-            <button type="submit" class="btn btn-primary">添加</button>
-            <a href="{{ url_for('routes_web.targets') }}" class="btn" style="background:#eee;">取消</a>
-        </div>
-    </form>
+    </aside>
 </div>
 {% endblock %}

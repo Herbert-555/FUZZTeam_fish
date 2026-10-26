@@ -1,108 +1,170 @@
 {% extends "base.html" %}
-{% block title %}EXE配置 - 钓鱼演练系统{% endblock %}
+{% block title %}EXE 配置 · 钓鱼演练系统{% endblock %}
+{% block page_name %}EXE 配置{% endblock %}
 {% block content %}
-<h1 style="margin-bottom:16px;">EXE配置</h1>
-
-<div class="card">
-    <h2>图标设置</h2>
-    <p style="color:#888;font-size:13px;margin-bottom:16px;">
-        选择预设图标或上传自定义 .ico 文件
-    </p>
-
-    {% if presets %}
-    <div style="margin-bottom:20px;">
-        <strong style="font-size:14px;color:#555;">预设图标</strong>
-        <form method="POST" style="display:flex;gap:12px;margin-top:8px;flex-wrap:wrap;">
-            {% for p in presets %}
-            <button type="submit" name="select_preset" value="{{ p }}"
-                    style="padding:12px 16px;border:2px solid {% if config.icon_path and p in config.icon_path %}#4361ee{% else %}#ddd{% endif %};border-radius:8px;background:#fff;cursor:pointer;text-align:center;min-width:80px;">
-                <img src="{{ url_for('routes_web.icon_file', filename=p) }}" style="width:48px;height:48px;display:block;margin:0 auto;">
-                <div style="font-size:12px;margin-top:4px;">{{ p.replace('.ico', '') }}</div>
-                {% if config.icon_path and p in config.icon_path %}
-                <div style="font-size:11px;color:#4361ee;margin-top:2px;">✓ 当前</div>
-                {% endif %}
-            </button>
-            {% endfor %}
-        </form>
+<div class="page-header">
+    <div>
+        <h1 class="page-title">EXE 配置</h1>
+        <p class="page-sub">图标、文件名模板、回传地址与运行行为。</p>
     </div>
-    {% endif %}
-
-    <div style="border-top:1px solid #eee;padding-top:16px;">
-        <strong style="font-size:14px;color:#555;">自定义上传</strong>
-        <form method="POST" enctype="multipart/form-data" style="margin-top:8px;">
-            <div style="display:flex;gap:8px;align-items:center;">
-                <input type="file" name="icon_file" accept=".ico" style="font-size:14px;">
-                <button type="submit" class="btn btn-primary">上传</button>
-            </div>
-        </form>
+    <div class="page-actions">
+        <a class="btn btn-secondary" href="{{ url_for('routes_web.exe_generate') }}">
+            <svg class="icon" aria-hidden="true"><use href="#i-box"></use></svg>
+            去生成 EXE
+        </a>
     </div>
 </div>
 
 <div class="card">
-    <h2>名称模板</h2>
-    <p style="color:#888;font-size:13px;margin-bottom:12px;">
-        占位符: <code>{name}</code> 姓名 &nbsp; <code>{token8}</code> Token前8位 &nbsp; <code>{token}</code> 完整Token
-    </p>
-    <form method="POST">
-        <input type="hidden" name="save_template" value="1">
-        <div class="form-group">
-            <label>名称模板</label>
-            <input type="text" name="name_template" value="{{ config.name_template }}" style="font-family:Consolas,monospace;">
+    <div class="card-head">
+        <div>
+            <div class="card-title">
+                <svg class="icon" aria-hidden="true"><use href="#i-image"></use></svg>
+                图标设置
+            </div>
+            <div class="card-sub">选择预设图标，或上传自定义 .ico 文件。</div>
         </div>
-        <div style="margin-bottom:12px;padding:8px;background:#f0f2f5;border-radius:6px;font-size:14px;">
-            预览: <strong>{{ preview }}.exe</strong>
+    </div>
+    <div class="card-body">
+        {% if presets %}
+        <form method="POST">
+            <div class="icon-grid">
+                {% for p in presets %}
+                <button type="submit" name="select_preset" value="{{ p }}"
+                        class="icon-option {% if config.icon_path and p in config.icon_path %}selected{% endif %}">
+                    <img src="{{ url_for('routes_web.icon_file', filename=p) }}" alt="{{ p }}">
+                    <span class="icon-name">{{ p.replace('.ico', '') }}</span>
+                    {% if config.icon_path and p in config.icon_path %}
+                    <svg class="icon icon-check" aria-hidden="true"><use href="#i-check-circle"></use></svg>
+                    {% endif %}
+                </button>
+                {% endfor %}
+            </div>
+        </form>
+        <hr class="section-divider">
+        {% endif %}
+
+        <form method="POST" enctype="multipart/form-data">
+            <div class="field-row">
+                <div class="form-group" style="flex: 2 1 260px;">
+                    <label for="icon_file">自定义图标</label>
+                    <input id="icon_file" type="file" name="icon_file" accept=".ico">
+                    <span class="help">仅支持 <code>.ico</code> 格式。</span>
+                </div>
+                <div class="form-group" style="flex: 0 0 auto; align-self: flex-end;">
+                    <button type="submit" class="btn btn-secondary">
+                        <svg class="icon" aria-hidden="true"><use href="#i-upload"></use></svg>
+                        上传图标
+                    </button>
+                </div>
+            </div>
+        </form>
+    </div>
+</div>
+
+<div class="grid-2">
+    <div class="card">
+        <div class="card-head">
+            <div class="card-title">
+                <svg class="icon" aria-hidden="true"><use href="#i-file"></use></svg>
+                名称模板
+            </div>
         </div>
-        <button type="submit" class="btn btn-primary">保存模板</button>
-    </form>
+        <div class="card-body">
+            <form method="POST">
+                <input type="hidden" name="save_template" value="1">
+                <div class="form-group">
+                    <label for="name_template">文件名模板</label>
+                    <input id="name_template" class="mono" type="text" name="name_template" value="{{ config.name_template }}">
+                    <span class="help">占位符：<code>{name}</code> 姓名 · <code>{token8}</code> Token 前 8 位 · <code>{token}</code> 完整 Token</span>
+                </div>
+                <div class="preview-box">
+                    <svg class="icon icon-sm" aria-hidden="true"><use href="#i-eye"></use></svg>
+                    <span>预览</span>
+                    <code>{{ preview }}.exe</code>
+                </div>
+                <div class="form-actions">
+                    <button type="submit" class="btn btn-primary">保存模板</button>
+                </div>
+            </form>
+        </div>
+    </div>
+
+    <div class="card">
+        <div class="card-head">
+            <div class="card-title">
+                <svg class="icon" aria-hidden="true"><use href="#i-server"></use></svg>
+                服务端配置
+            </div>
+        </div>
+        <div class="card-body">
+            <form method="POST">
+                <input type="hidden" name="save_server" value="1">
+                <div class="field-row">
+                    <div class="form-group" style="flex: 2 1 180px;">
+                        <label for="server_host">服务器 IP</label>
+                        <input id="server_host" type="text" name="server_host" value="{{ config.server_host }}" placeholder="192.168.1.100">
+                    </div>
+                    <div class="form-group" style="flex: 1 1 100px;">
+                        <label for="server_port">端口</label>
+                        <input id="server_port" type="number" name="server_port" value="{{ config.server_port }}" placeholder="8080">
+                    </div>
+                </div>
+                <div class="preview-box">
+                    <svg class="icon icon-sm" aria-hidden="true"><use href="#i-globe"></use></svg>
+                    <span>当前回传地址</span>
+                    <code>http://{{ config.server_host }}:{{ config.server_port }}</code>
+                </div>
+                <div class="form-actions">
+                    <button type="submit" class="btn btn-primary">保存服务端配置</button>
+                </div>
+            </form>
+        </div>
+    </div>
 </div>
 
 <div class="card">
-    <h2>服务端配置</h2>
-    <p style="color:#888;font-size:13px;margin-bottom:12px;">
-        生成 EXE 时嵌入的回传地址，应为目标可达的 IP。
-    </p>
-    <form method="POST">
-        <input type="hidden" name="save_server" value="1">
-        <div style="display:flex;gap:16px;flex-wrap:wrap;">
-            <div class="form-group" style="flex:2;min-width:200px;">
-                <label>服务器 IP</label>
-                <input type="text" name="server_host" value="{{ config.server_host }}" placeholder="192.168.1.100">
+    <div class="card-head">
+        <div>
+            <div class="card-title">
+                <svg class="icon" aria-hidden="true"><use href="#i-zap"></use></svg>
+                运行行为
             </div>
-            <div class="form-group" style="flex:1;min-width:120px;">
-                <label>端口</label>
-                <input type="number" name="server_port" value="{{ config.server_port }}" placeholder="8080">
-            </div>
+            <div class="card-sub">控制 EXE 运行结束后的清理与提示。</div>
         </div>
-        <p style="color:#888;font-size:12px;margin-bottom:12px;">
-            当前回传地址: <code>http://{{ config.server_host }}:{{ config.server_port }}</code>
-        </p>
-        <button type="submit" class="btn btn-primary">保存服务端配置</button>
-    </form>
-</div>
+    </div>
+    <div class="card-body">
+        <form method="POST">
+            <input type="hidden" name="save_behavior" value="1">
 
-<div class="card">
-    <h2>行为设置</h2>
-    <form method="POST">
-        <input type="hidden" name="save_behavior" value="1">
-        <div class="form-group">
-            <label style="display:flex;align-items:center;gap:8px;cursor:pointer;">
-                <input type="checkbox" name="self_destruct" {% if config.self_destruct %}checked{% endif %} style="width:auto;">
-                运行后清除自身（替换为随机名空文件）
+            <label class="switch">
+                <input type="checkbox" name="self_destruct" {% if config.self_destruct %}checked{% endif %}>
+                <span class="switch-text">
+                    <strong>运行后清除自身</strong>
+                    <span>EXE 运行完毕后替换为 0 字节随机名文件，原文件在下次重启后删除。</span>
+                </span>
             </label>
-            <span style="color:#888;font-size:12px;">开启后EXE运行完毕会替换为一个0字节无后缀随机名文件，原文件在下一次重启后删除</span>
-        </div>
-        <div class="form-group">
-            <label style="display:flex;align-items:center;gap:8px;cursor:pointer;">
-                <input type="checkbox" name="popup_enabled" {% if config.popup_enabled %}checked{% endif %} style="width:auto;" onchange="document.getElementById('popup_msg').disabled=!this.checked">
-                启用弹窗提示
+
+            <label class="switch">
+                <input type="checkbox" name="popup_enabled" {% if config.popup_enabled %}checked{% endif %}
+                       onchange="document.getElementById('popup_msg').disabled=!this.checked">
+                <span class="switch-text">
+                    <strong>启用弹窗提示</strong>
+                    <span>运行结束后弹出对话框显示自定义文字。</span>
+                </span>
             </label>
-        </div>
-        <div class="form-group">
-            <label>弹窗提示文字</label>
-            <input type="text" id="popup_msg" name="popup_message" value="{{ config.popup_message }}" placeholder="系统不兼容，运行失败!" {% if not config.popup_enabled %}disabled{% endif %}>
-            <span style="color:#888;font-size:12px;">EXE运行完毕后弹出对话框显示此文字</span>
-        </div>
-        <button type="submit" class="btn btn-primary">保存行为设置</button>
-    </form>
+
+            <div class="form-group">
+                <label for="popup_msg">弹窗提示文字</label>
+                <input id="popup_msg" type="text" name="popup_message" value="{{ config.popup_message }}"
+                       placeholder="系统不兼容，运行失败!" {% if not config.popup_enabled %}disabled{% endif %}>
+                <span class="help">仅在启用弹窗时生效。</span>
+            </div>
+
+            <div class="form-actions">
+                <button type="submit" class="btn btn-primary">保存行为设置</button>
+            </div>
+        </form>
+    </div>
 </div>
 {% endblock %}

@@ -55,6 +55,10 @@ def init_db():
             received_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
             FOREIGN KEY (target_id) REFERENCES targets(id)
         );
+
+        CREATE INDEX IF NOT EXISTS idx_targets_created ON targets(created_at DESC, id DESC);
+        CREATE INDEX IF NOT EXISTS idx_collections_target ON collections(target_id);
+        CREATE INDEX IF NOT EXISTS idx_collections_received ON collections(received_at DESC, id DESC);
     ''')
     conn.commit()
     # Add columns for existing databases
@@ -112,6 +116,35 @@ def get_all_targets():
         FROM targets t
         ORDER BY t.created_at DESC
     ''').fetchall()
+    conn.close()
+    result = []
+    for r in rows:
+        d = dict(r)
+        d['created_at'] = _to_local(d.get('created_at'))
+        result.append(d)
+    return result
+
+
+def count_targets():
+    conn = get_db()
+    total = conn.execute('SELECT COUNT(*) FROM targets').fetchone()[0]
+    conn.close()
+    return total
+
+
+def get_targets_page(page=1, page_size=20):
+    page = max(1, int(page))
+    page_size = max(1, int(page_size))
+    limit = -1 if page_size >= 99999 else page_size
+    offset = (page - 1) * page_size
+    conn = get_db()
+    rows = conn.execute('''
+        SELECT t.*,
+               (SELECT COUNT(*) FROM collections c WHERE c.target_id = t.id) as callback_count
+        FROM targets t
+        ORDER BY t.created_at DESC, t.id DESC
+        LIMIT ? OFFSET ?
+    ''', (limit, offset)).fetchall()
     conn.close()
     result = []
     for r in rows:
@@ -196,6 +229,39 @@ def get_all_collections():
         JOIN targets t ON t.id = c.target_id
         ORDER BY c.received_at DESC
     ''').fetchall()
+    conn.close()
+    result = []
+    for r in rows:
+        d = dict(r)
+        d['received_at'] = _to_local(d.get('received_at'))
+        result.append(d)
+    return result
+
+
+def count_collections():
+    conn = get_db()
+    total = conn.execute('''
+        SELECT COUNT(*)
+        FROM collections c
+        JOIN targets t ON t.id = c.target_id
+    ''').fetchone()[0]
+    conn.close()
+    return total
+
+
+def get_collections_page(page=1, page_size=20):
+    page = max(1, int(page))
+    page_size = max(1, int(page_size))
+    limit = -1 if page_size >= 99999 else page_size
+    offset = (page - 1) * page_size
+    conn = get_db()
+    rows = conn.execute('''
+        SELECT c.*, t.name as target_name, t.email as target_email, t.department as target_department
+        FROM collections c
+        JOIN targets t ON t.id = c.target_id
+        ORDER BY c.received_at DESC, c.id DESC
+        LIMIT ? OFFSET ?
+    ''', (limit, offset)).fetchall()
     conn.close()
     result = []
     for r in rows:

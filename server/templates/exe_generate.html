@@ -1,56 +1,78 @@
 {% extends "base.html" %}
-{% block title %}EXE生成 - 钓鱼演练系统{% endblock %}
+{% block title %}EXE 生成 · 钓鱼演练系统{% endblock %}
+{% block page_name %}EXE 生成{% endblock %}
 {% block content %}
-<h1 style="margin-bottom:16px;">EXE生成</h1>
+<div class="page-header">
+    <div>
+        <h1 class="page-title">EXE 生成</h1>
+        <p class="page-sub">用基础 EXE + 配置注入，为每个目标生成独立文件。</p>
+    </div>
+    <div class="page-actions">
+        <a class="btn btn-secondary" href="{{ url_for('routes_web.exe_config') }}">
+            <svg class="icon" aria-hidden="true"><use href="#i-sliders"></use></svg>
+            EXE 配置
+        </a>
+    </div>
+</div>
 
 {% if not server_configured %}
-<div style="background:#fff3cd;border:1px solid #ffc107;border-radius:8px;padding:12px 16px;margin-bottom:16px;display:flex;align-items:center;gap:10px;">
-    <span style="font-size:20px;">⚠️</span>
-    <span>尚未配置目标可达的服务器 IP，请先前往 <a href="{{ url_for('routes_web.exe_config') }}" style="font-weight:bold;color:#e76f51;">EXE 配置</a> 页面设置回传地址，否则生成的 EXE 将无法回传数据。</span>
+<div class="alert alert-warning" role="alert">
+    <svg class="icon" aria-hidden="true"><use href="#i-alert"></use></svg>
+    <div>尚未配置目标可达的服务器 IP。请先前往 <a href="{{ url_for('routes_web.exe_config') }}">EXE 配置</a> 设置回传地址，否则生成的 EXE 将无法回传数据。</div>
 </div>
 {% endif %}
 
-<div class="card" style="margin-bottom:20px;">
-    <h2>基础 EXE</h2>
-    <p style="color:#888;font-size:13px;margin-bottom:12px;">
-        只需构建一次。之后每个目标的 EXE 通过复制+注入配置来生成，毫秒级完成。
-    </p>
-    <div style="display:flex;align-items:center;gap:12px;">
-        <span style="font-size:13px;color:{% if has_base_exe %}#2e7d32{% else %}#888{% endif %};">
-            {% if has_base_exe %}✅ 基础 EXE 已就绪{% else %}⚠️ 尚未构建基础 EXE{% endif %}
-        </span>
+<div class="card">
+    <div class="card-head">
+        <div>
+            <div class="card-title">
+                <svg class="icon" aria-hidden="true"><use href="#i-box"></use></svg>
+                基础 EXE
+                {% if has_base_exe %}
+                <span class="badge badge-success"><span class="dot"></span>已就绪</span>
+                {% else %}
+                <span class="badge badge-warning"><span class="dot"></span>未构建</span>
+                {% endif %}
+            </div>
+            <div class="card-sub">基础 EXE 是配置注入的模板，通常只需构建一次。</div>
+        </div>
         <form action="{{ url_for('routes_web.build_base') }}" method="POST">
-            <button class="btn btn-primary" {% if has_base_exe %}style="background:#888;"{% endif %}>
-                {{ '重新构建基础 EXE' if has_base_exe else '构建基础 EXE' }}
+            <button class="btn {% if has_base_exe %}btn-secondary{% else %}btn-primary{% endif %}" type="submit">
+                <svg class="icon" aria-hidden="true"><use href="#i-refresh"></use></svg>
+                {% if has_base_exe %}重新构建{% else %}构建基础 EXE{% endif %}
             </button>
         </form>
+    </div>
+    <div class="card-body">
+        <p class="help">构建时会用 PyInstaller 打包 <code>client/collector.py</code>，首次可能需要 1–3 分钟。构建完成后，单个目标的 EXE 通过复制 + 注入配置生成，毫秒级完成。</p>
     </div>
 </div>
 
 <div class="card">
-    <h2>选择目标生成EXE</h2>
-    {% if not has_base_exe %}
-    <p style="color:#e76f51;font-size:13px;margin-bottom:16px;">
-        ⚠️ 请先构建基础 EXE，否则将使用 PyInstaller 逐个打包（慢）
-    </p>
-    {% else %}
-    <p style="color:#888;font-size:13px;margin-bottom:16px;">
-        使用基础 EXE + 配置注入模式，生成速度极快。
-    </p>
-    {% endif %}
+    <div class="card-head">
+        <div>
+            <div class="card-title">
+                <svg class="icon" aria-hidden="true"><use href="#i-target"></use></svg>
+                选择目标生成
+                <span class="badge badge-muted">{{ targets|length }}</span>
+            </div>
+            <div class="card-sub">可单独生成，或勾选后批量生成。</div>
+        </div>
+    </div>
 
     {% if targets %}
-    <form action="{{ url_for('routes_web.build_batch_exes') }}" method="POST">
-        <table>
+    <div class="table-hint">左右滚动查看全部列 →</div>
+    <form id="batchBuildForm" action="{{ url_for('routes_web.build_batch_exes') }}" method="POST"></form>
+    <div class="table-wrap">
+        <table class="table table-wide">
             <thead>
                 <tr>
-                    <th style="width:40px;">
-                        <input type="checkbox" onclick="document.querySelectorAll('.target-cb').forEach(cb=>cb.checked=this.checked)">
+                    <th class="checkbox-cell">
+                        <input type="checkbox" aria-label="全选目标" onclick="document.querySelectorAll('.target-cb').forEach(cb=>cb.checked=this.checked)">
                     </th>
-                    <th>姓名</th>
-                    <th>邮箱</th>
-                    <th>部门</th>
-                    <th>EXE文件名</th>
+                    <th>目标</th>
+                    <th class="hide-sm">部门</th>
+                    <th>EXE 文件名</th>
                     <th>Token</th>
                     <th>已回传</th>
                     <th>操作</th>
@@ -59,63 +81,103 @@
             <tbody>
                 {% for t in targets %}
                 <tr>
-                    <td>
-                        <input class="target-cb" type="checkbox" name="target_ids" value="{{ t.id }}">
+                    <td class="checkbox-cell">
+                        <input class="target-cb" type="checkbox" name="target_ids" value="{{ t.id }}" form="batchBuildForm" aria-label="选择 {{ t.name }}">
                     </td>
-                    <td><strong>{{ t.name }}</strong></td>
-                    <td>{{ t.email }}</td>
-                    <td>{{ t.department }}</td>
-                    <td>{{ t.exe_filename or '使用模板' }}</td>
-                    <td><code style="font-size:11px;">{{ t.unique_token[:8] }}...</code></td>
                     <td>
-                        {% if t.callback_count %}
-                        <span class="badge badge-yes">是</span>
+                        <span class="cell-title">{{ t.name }}</span>
+                        <span class="cell-sub">{{ t.email or '未填写邮箱' }}</span>
+                    </td>
+                    <td class="hide-sm">{{ t.department or '—' }}</td>
+                    <td>
+                        {% if t.exe_filename %}
+                        <span class="mono">{{ t.exe_filename }}</span>
                         {% else %}
-                        <span class="badge badge-no">否</span>
+                        <span class="muted">使用模板</span>
                         {% endif %}
                     </td>
                     <td>
-                        <form action="{{ url_for('routes_web.build_single_exe', target_id=t.id) }}" method="POST" style="display:inline;">
-                            <button class="btn btn-sm btn-primary">单独生成</button>
+                        <button class="copy-chip" type="button" data-copy="{{ t.unique_token }}" title="复制完整 Token">
+                            <svg class="icon" aria-hidden="true"><use href="#i-copy"></use></svg>
+                            <span>{{ t.unique_token[:8] }}…</span>
+                        </button>
+                    </td>
+                    <td>
+                        {% if t.callback_count %}
+                        <span class="badge badge-success"><span class="dot"></span>是</span>
+                        {% else %}
+                        <span class="badge badge-muted"><span class="dot"></span>否</span>
+                        {% endif %}
+                    </td>
+                    <td>
+                        <form class="inline-form" action="{{ url_for('routes_web.build_single_exe', target_id=t.id) }}" method="POST">
+                            <button class="btn btn-secondary btn-sm" type="submit">单独生成</button>
                         </form>
                     </td>
                 </tr>
                 {% endfor %}
             </tbody>
         </table>
-        <div class="btn-group">
-            <button type="submit" class="btn btn-success">批量生成选中</button>
+    </div>
+    <div class="toolbar">
+        <div class="toolbar-left">
+            <button class="btn btn-primary" type="submit" form="batchBuildForm" {% if not server_configured %}disabled title="请先在 EXE 配置页面设置服务器 IP"{% endif %}>
+                <svg class="icon" aria-hidden="true"><use href="#i-zap"></use></svg>
+                批量生成选中
+            </button>
         </div>
-    </form>
+        <div class="toolbar-right">
+            <span class="count-chip">基础 EXE：{% if has_base_exe %}已就绪{% else %}未构建，将逐个打包{% endif %}</span>
+        </div>
+    </div>
     {% else %}
     <div class="empty">
-        <div class="icon">📦</div>
-        <p>暂无目标，请先在目标管理中添加</p>
+        <span class="empty-icon"><svg class="icon" aria-hidden="true"><use href="#i-box"></use></svg></span>
+        <div class="empty-title">暂无目标</div>
+        <div class="empty-text">先在目标管理中添加目标，再回来生成 EXE。</div>
+        <a class="btn btn-primary btn-sm" href="{{ url_for('routes_web.add_target_view') }}">
+            <svg class="icon" aria-hidden="true"><use href="#i-plus"></use></svg>
+            添加目标
+        </a>
     </div>
     {% endif %}
 </div>
 
 {% if files %}
 <div class="card">
-    <h2>已生成的EXE文件</h2>
-    <table>
-        <thead>
-            <tr>
-                <th>文件名</th>
-                <th>操作</th>
-            </tr>
-        </thead>
-        <tbody>
-            {% for f in files %}
-            <tr>
-                <td>{{ f }}</td>
-                <td>
-                    <a href="{{ url_for('routes_web.download_exe', filename=f) }}" class="btn btn-sm btn-primary">下载</a>
-                </td>
-            </tr>
-            {% endfor %}
-        </tbody>
-    </table>
+    <div class="card-head">
+        <div>
+            <div class="card-title">
+                <svg class="icon" aria-hidden="true"><use href="#i-package-check"></use></svg>
+                已生成的 EXE
+                <span class="badge badge-muted">{{ files|length }}</span>
+            </div>
+            <div class="card-sub">按生成时间倒序。</div>
+        </div>
+    </div>
+    <div class="table-wrap">
+        <table class="table table-compact">
+            <thead>
+                <tr>
+                    <th>文件名</th>
+                    <th>操作</th>
+                </tr>
+            </thead>
+            <tbody>
+                {% for f in files %}
+                <tr>
+                    <td><span class="mono">{{ f }}</span></td>
+                    <td>
+                        <a class="btn btn-secondary btn-sm" href="{{ url_for('routes_web.download_exe', filename=f) }}">
+                            <svg class="icon" aria-hidden="true"><use href="#i-download"></use></svg>
+                            下载
+                        </a>
+                    </td>
+                </tr>
+                {% endfor %}
+            </tbody>
+        </table>
+    </div>
 </div>
 {% endif %}
 {% endblock %}

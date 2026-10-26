@@ -1,0 +1,46 @@
+{% macro pagination_footer(pagination, page_sizes, endpoint) %}
+<div class="table-footer">
+    <div class="table-footer-info">
+        <span class="table-count">共 {{ pagination.total }} 条</span>
+        <span class="table-range">显示 {{ pagination.start }}–{{ pagination.end }} 条</span>
+        <span class="page-status">第 {{ pagination.page }} / {{ pagination.total_pages }} 页</span>
+        <form class="page-size-form" method="get">
+            <input type="hidden" name="page" value="1">
+            <label>每页
+                <select name="page_size" onchange="this.form.submit()">
+                    {% for size in page_sizes %}
+                    <option value="{{ size }}" {% if size == pagination.page_size %}selected{% endif %}>{{ size }}{% if size == 99999 %}（全部）{% endif %}</option>
+                    {% endfor %}
+                </select>
+            </label>
+            <noscript><button class="page-btn" type="submit">应用</button></noscript>
+        </form>
+    </div>
+
+    {% if pagination.total_pages > 1 %}
+    <nav class="pagination" aria-label="分页">
+        {% if pagination.has_prev %}
+        <a class="page-btn" href="{{ url_for(endpoint, page=pagination.page - 1, page_size=pagination.page_size) }}" aria-label="上一页">上一页</a>
+        {% else %}
+        <span class="page-btn is-disabled" aria-disabled="true">上一页</span>
+        {% endif %}
+
+        {% for item in pagination.page_items %}
+        {% if item is none %}
+        <span class="page-ellipsis">…</span>
+        {% elif item == pagination.page %}
+        <span class="page-btn active" aria-current="page">{{ item }}</span>
+        {% else %}
+        <a class="page-btn" href="{{ url_for(endpoint, page=item, page_size=pagination.page_size) }}">{{ item }}</a>
+        {% endif %}
+        {% endfor %}
+
+        {% if pagination.has_next %}
+        <a class="page-btn" href="{{ url_for(endpoint, page=pagination.page + 1, page_size=pagination.page_size) }}" aria-label="下一页">下一页</a>
+        {% else %}
+        <span class="page-btn is-disabled" aria-disabled="true">下一页</span>
+        {% endif %}
+    </nav>
+    {% endif %}
+</div>
+{% endmacro %}

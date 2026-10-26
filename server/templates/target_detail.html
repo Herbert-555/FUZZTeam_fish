@@ -1,137 +1,190 @@
 {% extends "base.html" %}
-{% block title %}目标详情 - 钓鱼演练系统{% endblock %}
+{% block title %}{{ target.name }} · 目标详情{% endblock %}
+{% block page_name %}目标详情{% endblock %}
 {% block content %}
-<h1 style="margin-bottom:16px;">目标详情: {{ target.name }}</h1>
+<div class="page-header">
+    <div>
+        <h1 class="page-title">{{ target.name }}</h1>
+        <p class="page-sub">目标详情 · 创建于 {{ target.created_at }}</p>
+    </div>
+    <div class="page-actions">
+        <a class="btn btn-secondary" href="{{ url_for('routes_web.targets') }}">
+            <svg class="icon" aria-hidden="true"><use href="#i-arrow-left"></use></svg>
+            返回列表
+        </a>
+    </div>
+</div>
 
 <div class="card">
-    <h2>基本信息</h2>
-    <div class="detail-grid">
-        <div class="detail-item">
-            <div class="key">姓名</div>
-            <div class="val">{{ target.name }}</div>
+    <div class="card-head">
+        <div class="card-title">
+            <svg class="icon" aria-hidden="true"><use href="#i-user"></use></svg>
+            基本信息
         </div>
-        <div class="detail-item">
-            <div class="key">邮箱</div>
-            <div class="val">{{ target.email }}</div>
-        </div>
-        <div class="detail-item">
-            <div class="key">部门</div>
-            <div class="val">{{ target.department or '未设置' }}</div>
-        </div>
-        <div class="detail-item">
-            <div class="key">EXE文件名</div>
-            <div class="val">{{ target.exe_filename or '使用统一模板' }}</div>
-        </div>
-        <div class="detail-item">
-            <div class="key">Token</div>
-            <div class="val"><code>{{ target.unique_token }}</code></div>
-        </div>
-        <div class="detail-item">
-            <div class="key">创建时间</div>
-            <div class="val">{{ target.created_at }}</div>
+    </div>
+    <div class="card-body">
+        <div class="detail-grid cols-3">
+            <div class="detail-item">
+                <div class="key">姓名</div>
+                <div class="val"><strong>{{ target.name }}</strong></div>
+            </div>
+            <div class="detail-item">
+                <div class="key">邮箱</div>
+                <div class="val">{{ target.email or '未设置' }}</div>
+            </div>
+            <div class="detail-item">
+                <div class="key">部门</div>
+                <div class="val">{{ target.department or '未设置' }}</div>
+            </div>
+            <div class="detail-item">
+                <div class="key">EXE 文件名</div>
+                <div class="val">{{ target.exe_filename or '使用统一模板' }}</div>
+            </div>
+            <div class="detail-item">
+                <div class="key">Token</div>
+                <div class="val">
+                    <code class="token-code">{{ target.unique_token }}</code>
+                    <button class="copy-chip" type="button" data-copy="{{ target.unique_token }}" title="复制完整 Token">
+                        <svg class="icon" aria-hidden="true"><use href="#i-copy"></use></svg>
+                        复制
+                    </button>
+                </div>
+            </div>
+            <div class="detail-item">
+                <div class="key">创建时间</div>
+                <div class="val">{{ target.created_at }}</div>
+            </div>
         </div>
     </div>
 </div>
 
 <div class="card">
-    <h2>回传记录 ({{ collections|length }})</h2>
-    {% if collections %}
-    {% for c in collections %}
-    <div style="margin-bottom:24px;border-bottom:1px solid #eee;padding-bottom:16px;">
-        <div class="detail-grid">
-            <div class="detail-item">
-                <div class="key">IP地址</div>
-                <div class="val">{{ c.ip_address }}</div>
+    <div class="card-head">
+        <div>
+            <div class="card-title">
+                <svg class="icon" aria-hidden="true"><use href="#i-database"></use></svg>
+                回传记录
+                <span class="badge badge-muted">{{ collections|length }}</span>
             </div>
-            <div class="detail-item">
-                <div class="key">MAC地址</div>
-                <div class="val">{{ c.mac_address }}</div>
-            </div>
-            <div class="detail-item">
-                <div class="key">出口IP</div>
-                <div class="val"><code>{{ c.exit_ip or '-' }}</code></div>
-            </div>
-            <div class="detail-item">
-                <div class="key">主机名</div>
-                <div class="val">{{ c.hostname }}</div>
-            </div>
-            <div class="detail-item">
-                <div class="key">用户名</div>
-                <div class="val">{{ c.username }}</div>
-            </div>
-            <div class="detail-item">
-                <div class="key">回传时间</div>
-                <div class="val">{{ c.received_at }}</div>
-            </div>
+            <div class="card-sub">截图与目录结构按回传时间倒序展示。</div>
         </div>
-
-        {% if c.screenshot_path %}
-        <div style="margin-top:12px;">
-            <strong style="font-size:14px;color:#555;">截屏</strong><br>
-            <img src="{{ url_for('routes_web.uploaded_file', filename=c.screenshot_path) }}" class="screenshot-img" style="max-width:600px;margin-top:8px;" onclick="window.open(this.src)">
-        </div>
-        {% endif %}
-
-        {% if c.dir_info_parsed %}
-        <div style="margin-top:12px;">
-            <strong style="font-size:14px;color:#555;">文件列表</strong>
-            {% for dir_name, dir_data in c.dir_info_parsed.items() %}
-            <details style="margin-top:6px;" {% if dir_data.exists and not dir_data.error %}open{% endif %}>
-                <summary style="cursor:pointer;font-weight:600;font-size:13px;color:#4361ee;padding:4px 0;">
-                    📁 {{ dir_name }}
-                    {% if dir_data.tree %}<span style="font-weight:400;color:#888;">({{ dir_data.tree|length }} 项)</span>{% endif %}
-                </summary>
-                {% if not dir_data.exists %}
-                <div style="color:#999;padding-left:20px;">路径不存在</div>
-                {% elif dir_data.error %}
-                <div style="color:#999;padding-left:20px;">{{ dir_data.error }}</div>
-                {% else %}
-                <div style="max-height:360px;overflow-y:auto;background:#1a1a2e;border-radius:4px;padding:10px 14px;font-family:Consolas,monospace;font-size:12px;line-height:1.6;">
-                    {% for item in dir_data.tree %}
-                        {% if item.type == 'dir' %}
-                        <div style="color:#8bc34a;">📂 {{ item.name }}/</div>
-                            {% for child in item.children %}
-                            <div style="color:#e0e0e0;padding-left:24px;display:flex;justify-content:space-between;">
-                                <span>📄 {{ child.name }}</span>
-                                <span style="color:#999;flex-shrink:0;margin-left:12px;">
-                                {% set mb = child.size / 1048576 %}
-                                {% set kb = child.size / 1024 %}
-                                {% if mb >= 1 %}{{ '%.2f' % mb }} MB
-                                {% elif kb >= 1 %}{{ '%.1f' % kb }} KB
-                                {% else %}{{ child.size }} B{% endif %}
-                                </span>
-                            </div>
-                            {% endfor %}
-                        {% else %}
-                        <div style="color:#e0e0e0;display:flex;justify-content:space-between;">
-                            <span>📄 {{ item.name }}</span>
-                            <span style="color:#999;flex-shrink:0;margin-left:12px;">
-                            {% set mb = item.size / 1048576 %}
-                            {% set kb = item.size / 1024 %}
-                            {% if mb >= 1 %}{{ '%.2f' % mb }} MB
-                            {% elif kb >= 1 %}{{ '%.1f' % kb }} KB
-                            {% else %}{{ item.size }} B{% endif %}
-                            </span>
-                        </div>
-                        {% endif %}
-                    {% endfor %}
-                </div>
-                {% endif %}
-            </details>
-            {% endfor %}
-        </div>
-        {% endif %}
     </div>
-    {% endfor %}
+
+    {% if collections %}
+        {% for c in collections %}
+        <div class="collection-block">
+            <div class="collection-head">
+                <div class="collection-title">
+                    <svg class="icon" aria-hidden="true"><use href="#i-monitor"></use></svg>
+                    回传 #{{ loop.index }}
+                    {% if c.exit_ip %}<span class="badge badge-muted">出口 {{ c.exit_ip }}</span>{% endif %}
+                </div>
+                <span class="collection-time">{{ c.received_at }}</span>
+            </div>
+
+            <div class="detail-grid cols-3">
+                <div class="detail-item">
+                    <div class="key">IP 地址</div>
+                    <div class="val ip-cell">{{ c.ip_address or '—' }}</div>
+                </div>
+                <div class="detail-item">
+                    <div class="key">MAC 地址</div>
+                    <div class="val ip-cell">{{ c.mac_list or '—' }}</div>
+                </div>
+                <div class="detail-item">
+                    <div class="key">出口 IP</div>
+                    <div class="val"><code>{{ c.exit_ip or '—' }}</code></div>
+                </div>
+                <div class="detail-item">
+                    <div class="key">主机名</div>
+                    <div class="val">{{ c.hostname or '—' }}</div>
+                </div>
+                <div class="detail-item">
+                    <div class="key">用户名</div>
+                    <div class="val">{{ c.username or '—' }}</div>
+                </div>
+                <div class="detail-item">
+                    <div class="key">回传时间</div>
+                    <div class="val">{{ c.received_at }}</div>
+                </div>
+            </div>
+
+            {% if c.screenshot_path %}
+            <div class="shot-wrap">
+                <div class="shot-label">
+                    <svg class="icon icon-sm" aria-hidden="true"><use href="#i-image"></use></svg>
+                    屏幕截图
+                </div>
+                <img class="shot"
+                     src="{{ url_for('routes_web.uploaded_file', filename=c.screenshot_path) }}"
+                     alt="{{ target.name }} 的屏幕截图"
+                     data-lightbox="{{ url_for('routes_web.uploaded_file', filename=c.screenshot_path) }}">
+            </div>
+            {% endif %}
+
+            {% if c.dir_info_parsed %}
+            <div class="shot-wrap">
+                <div class="shot-label">
+                    <svg class="icon icon-sm" aria-hidden="true"><use href="#i-folder"></use></svg>
+                    文件列表
+                </div>
+                {% for dir_name, dir_data in c.dir_info_parsed.items() %}
+                <details class="tree-group" {% if dir_data.exists and not dir_data.error and loop.first %}open{% endif %}>
+                    <summary>
+                        <svg class="icon icon-sm chev" aria-hidden="true"><use href="#i-chevron-right"></use></svg>
+                        <svg class="icon icon-sm" aria-hidden="true"><use href="#i-folder"></use></svg>
+                        <span>{{ dir_name }}</span>
+                        <span class="tree-count">{{ dir_data.tree|length }} 项</span>
+                    </summary>
+                    <div class="tree">
+                        {% if not dir_data.exists %}
+                        <div class="tree-empty">路径不存在</div>
+                        {% elif dir_data.error %}
+                        <div class="tree-empty">{{ dir_data.error }}</div>
+                        {% else %}
+                            {% for item in dir_data.tree %}
+                                {% if item.type == 'dir' %}
+                                <div class="tree-row is-dir">
+                                    <svg class="icon" aria-hidden="true"><use href="#i-folder"></use></svg>
+                                    <span class="tree-name">{{ item.name }}/</span>
+                                </div>
+                                    {% for child in item.children %}
+                                    <div class="tree-row is-child">
+                                        <svg class="icon" aria-hidden="true"><use href="#i-file"></use></svg>
+                                        <span class="tree-name">{{ child.name }}</span>
+                                        <span class="tree-size">
+                                            {% set mb = child.size / 1048576 %}
+                                            {% set kb = child.size / 1024 %}
+                                            {% if mb >= 1 %}{{ '%.2f' % mb }} MB{% elif kb >= 1 %}{{ '%.1f' % kb }} KB{% else %}{{ child.size }} B{% endif %}
+                                        </span>
+                                    </div>
+                                    {% endfor %}
+                                {% else %}
+                                <div class="tree-row">
+                                    <svg class="icon" aria-hidden="true"><use href="#i-file"></use></svg>
+                                    <span class="tree-name">{{ item.name }}</span>
+                                    <span class="tree-size">
+                                        {% set mb = item.size / 1048576 %}
+                                        {% set kb = item.size / 1024 %}
+                                        {% if mb >= 1 %}{{ '%.2f' % mb }} MB{% elif kb >= 1 %}{{ '%.1f' % kb }} KB{% else %}{{ item.size }} B{% endif %}
+                                    </span>
+                                </div>
+                                {% endif %}
+                            {% endfor %}
+                        {% endif %}
+                    </div>
+                </details>
+                {% endfor %}
+            </div>
+            {% endif %}
+        </div>
+        {% endfor %}
     {% else %}
     <div class="empty">
-        <div class="icon">📭</div>
-        <p>该目标暂无回传数据</p>
+        <span class="empty-icon"><svg class="icon" aria-hidden="true"><use href="#i-database"></use></svg></span>
+        <div class="empty-title">该目标暂无回传数据</div>
+        <div class="empty-text">目标运行生成的 EXE 并成功出网后，记录会出现在这里。</div>
     </div>
     {% endif %}
-</div>
-
-<div class="btn-group">
-    <a href="{{ url_for('routes_web.targets') }}" class="btn" style="background:#eee;">返回列表</a>
 </div>
 {% endblock %}

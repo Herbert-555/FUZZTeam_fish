@@ -1,31 +1,82 @@
 {% extends "base.html" %}
-{% block title %}批量导入 - 钓鱼演练系统{% endblock %}
+{% block title %}批量导入 · 钓鱼演练系统{% endblock %}
+{% block page_name %}批量导入{% endblock %}
 {% block content %}
-<h1 style="margin-bottom:16px;">批量导入目标</h1>
-
-<div class="btn-group" style="margin-bottom:16px;">
-    <a href="{{ url_for('routes_web.download_import_template', type='xlsx') }}" class="btn btn-primary">下载Excel模板</a>
-    <a href="{{ url_for('routes_web.download_import_template', type='csv') }}" class="btn" style="background:#e9c46a;">下载CSV模板</a>
+<div class="page-header">
+    <div>
+        <h1 class="page-title">批量导入目标</h1>
+        <p class="page-sub">粘贴文本或上传 CSV / XLSX 文件，一次录入多个目标。</p>
+    </div>
+    <div class="page-actions">
+        <a class="btn btn-secondary" href="{{ url_for('routes_web.targets') }}">
+            <svg class="icon" aria-hidden="true"><use href="#i-arrow-left"></use></svg>
+            返回列表
+        </a>
+    </div>
 </div>
 
-<div class="card">
-    <form method="POST" enctype="multipart/form-data">
-        <div class="form-group">
-            <label>目标数据</label>
-            <textarea name="batch_data" placeholder="每行一个目标，格式：姓名,邮箱,部门,EXE文件名&#10;仅姓名必填，EXE文件名可为空，空时使用统一名称模板&#10;例如：&#10;张三,zhangsan@company.com,技术部,张三方案&#10;李四,lisi@company.com,财务部,&#10;王五,wangwu@company.com"></textarea>
+<div class="grid-2-1">
+    <div class="card">
+        <div class="card-head">
+            <div class="card-title">
+                <svg class="icon" aria-hidden="true"><use href="#i-upload"></use></svg>
+                导入数据
+            </div>
         </div>
-        <div class="form-group">
-            <label>导入文件</label>
-            <input type="file" name="target_file" accept=".csv,.xlsx">
-            <span style="color:#888;font-size:12px;">支持 CSV/xlsx，列顺序：姓名、邮箱、部门、EXE文件名；可包含表头。</span>
+        <div class="card-body">
+            <form method="POST" enctype="multipart/form-data">
+                <div class="form-group">
+                    <label for="batch_data">粘贴目标数据</label>
+                    <textarea id="batch_data" name="batch_data" placeholder="每行一个目标，格式：姓名,邮箱,部门,EXE文件名&#10;仅姓名必填，EXE文件名可为空，空时使用统一名称模板&#10;例如：&#10;张三,zhangsan@company.com,技术部,张三方案&#10;李四,lisi@company.com,财务部,&#10;王五,wangwu@company.com"></textarea>
+                    <span class="help">英文逗号分隔；可包含表头。仅姓名必填。</span>
+                </div>
+
+                <div class="form-group">
+                    <label for="target_file">或上传文件</label>
+                    <input id="target_file" type="file" name="target_file" accept=".csv,.xlsx">
+                    <span class="help">支持 CSV / XLSX，列顺序：姓名、邮箱、部门、EXE 文件名。</span>
+                </div>
+
+                <div class="form-actions">
+                    <button type="submit" class="btn btn-primary">
+                        <svg class="icon" aria-hidden="true"><use href="#i-upload"></use></svg>
+                        批量导入
+                    </button>
+                    <a class="btn btn-secondary" href="{{ url_for('routes_web.targets') }}">取消</a>
+                </div>
+            </form>
         </div>
-        <div style="color:#888;font-size:13px;margin-bottom:12px;">
-            每行一个目标，英文逗号分隔。仅姓名必填。EXE文件名不需要填写 .exe；为空时使用统一名称模板。
+    </div>
+
+    <aside class="card">
+        <div class="card-head">
+            <div class="card-title">
+                <svg class="icon" aria-hidden="true"><use href="#i-file"></use></svg>
+                模板与格式
+            </div>
         </div>
-        <div class="btn-group">
-            <button type="submit" class="btn btn-primary">批量导入</button>
-            <a href="{{ url_for('routes_web.targets') }}" class="btn" style="background:#eee;">返回</a>
+        <div class="card-body">
+            <p class="help">建议先用模板填写，再上传文件。表头可保留，系统会自动识别。</p>
+            <div class="quick-list mt-12">
+                <a class="quick-item" href="{{ url_for('routes_web.download_import_template', type='xlsx') }}">
+                    <span class="quick-icon"><svg class="icon" aria-hidden="true"><use href="#i-download"></use></svg></span>
+                    <span class="quick-text">
+                        <strong>下载 Excel 模板</strong>
+                        <span>.xlsx · 推荐</span>
+                    </span>
+                </a>
+                <a class="quick-item" href="{{ url_for('routes_web.download_import_template', type='csv') }}">
+                    <span class="quick-icon"><svg class="icon" aria-hidden="true"><use href="#i-download"></use></svg></span>
+                    <span class="quick-text">
+                        <strong>下载 CSV 模板</strong>
+                        <span>.csv · UTF-8</span>
+                    </span>
+                </a>
+            </div>
+            <div class="sidebar-note">
+                列顺序固定为：姓名、邮箱、部门、EXE 文件名。EXE 文件名不需要写 <code>.exe</code>，留空时使用统一模板。
+            </div>
         </div>
-    </form>
+    </aside>
 </div>
 {% endblock %}

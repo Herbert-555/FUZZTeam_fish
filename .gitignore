@@ -10,6 +10,9 @@ client_build/
 # Generated output
 output/*.exe
 
+# Local QA artifacts
+preview/
+
 # Data files (runtime state)
 data/database.db
 data/exe_config.json

@@ -1,88 +1,110 @@
 <!DOCTYPE html>
-<html lang="zh-CN">
+<html lang="zh-CN" data-theme="dark">
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>登录 - FUZZTeam_fish</title>
-    <link rel="stylesheet" href="{{ url_for('static', filename='style.css') }}">
-    <style>
-        .login-container {
-            max-width: 400px;
-            margin: 80px auto;
-            padding: 40px;
-            background: #fff;
-            border-radius: 12px;
-            box-shadow: 0 4px 24px rgba(0,0,0,0.12);
-        }
-        .login-container h1 {
-            text-align: center;
-            margin-bottom: 8px;
-            font-size: 24px;
-        }
-        .login-container .subtitle {
-            text-align: center;
-            color: #888;
-            font-size: 13px;
-            margin-bottom: 28px;
-        }
-        .login-container .form-group {
-            margin-bottom: 16px;
-        }
-        .login-container label {
-            display: block;
-            font-weight: 600;
-            margin-bottom: 6px;
-            font-size: 14px;
-        }
-        .login-container input {
-            width: 100%;
-            padding: 10px 12px;
-            border: 1px solid #ddd;
-            border-radius: 6px;
-            font-size: 14px;
-            box-sizing: border-box;
-        }
-        .login-container input:focus {
-            outline: none;
-            border-color: #4361ee;
-        }
-        .login-container .btn {
-            width: 100%;
-            padding: 12px;
-            font-size: 16px;
-            margin-top: 8px;
-        }
-        .login-error {
-            background: #fff2f0;
-            border: 1px solid #ffccc7;
-            color: #ff4d4f;
-            padding: 10px 14px;
-            border-radius: 6px;
-            margin-bottom: 16px;
-            font-size: 13px;
-        }
-    </style>
+    <meta name="theme-color" content="#010102">
+    <title>登录 · FUZZTeam Fish</title>
+    <script>
+        (function () {
+            try {
+                var theme = localStorage.getItem('fish-theme');
+                if (theme !== 'light' && theme !== 'dark') {
+                    theme = 'dark';
+                }
+                document.documentElement.setAttribute('data-theme', theme);
+            } catch (e) {
+                document.documentElement.setAttribute('data-theme', 'dark');
+            }
+        })();
+    </script>
+    <link rel="icon" type="image/svg+xml" href="{{ url_for('static', filename='favicon.svg', v='20261026f') }}">
+    <link rel="stylesheet" href="{{ url_for('static', filename='style.css', v='20261026f') }}">
 </head>
-<body style="background:#f0f2f5;">
-    <div class="login-container">
-        <h1>🐟 FUZZTeam_fish</h1>
-        <p class="subtitle">钓鱼演练系统</p>
+<body class="auth-page">
+{% include "_icons.html" %}
+
+<div class="auth-theme">
+    <button class="theme-toggle" type="button" data-theme-toggle aria-label="切换主题">
+        <svg class="icon icon-sun" aria-hidden="true"><use href="#i-sun"></use></svg>
+        <svg class="icon icon-moon" aria-hidden="true"><use href="#i-moon"></use></svg>
+    </button>
+</div>
+
+<main class="auth-shell">
+    <aside class="auth-aside">
+        <div>
+            <div class="auth-brand">
+                <span class="brand-mark"><svg class="icon" aria-hidden="true"><use href="#i-fish"></use></svg></span>
+                <span class="brand-text">
+                    <span class="brand-name">FUZZTeam Fish</span>
+                    <span class="brand-sub">钓鱼演练系统</span>
+                </span>
+            </div>
+
+            <h1 class="auth-headline">把安全意识演练，<br><span>做成一套可度量的流程。</span></h1>
+            <p class="auth-lead">管理目标、生成绑定目标的 EXE、接收回传数据，全流程留痕，仅用于已授权的内部演练。</p>
+
+            <div class="auth-features">
+                <div class="auth-feature">
+                    <svg class="icon" aria-hidden="true"><use href="#i-target"></use></svg>
+                    <span>目标分组与批量导入</span>
+                </div>
+                <div class="auth-feature">
+                    <svg class="icon" aria-hidden="true"><use href="#i-box"></use></svg>
+                    <span>基础 EXE 配置注入，毫秒级生成</span>
+                </div>
+                <div class="auth-feature">
+                    <svg class="icon" aria-hidden="true"><use href="#i-database"></use></svg>
+                    <span>主机信息、截图与文件结构回传</span>
+                </div>
+            </div>
+        </div>
+
+        <div class="auth-aside-foot">
+            <span>FUZZTEAM FISH · INTERNAL AUTHORIZED DRILL</span>
+        </div>
+
+        <div class="auth-watermark" aria-hidden="true">
+            <svg class="icon"><use href="#i-fish"></use></svg>
+        </div>
+    </aside>
+
+    <section class="auth-main">
+        <div class="auth-mobile-brand">
+            <span class="brand-mark"><svg class="icon" aria-hidden="true"><use href="#i-fish"></use></svg></span>
+            <span class="brand-text">
+                <span class="brand-name">FUZZTeam Fish</span>
+                <span class="brand-sub">钓鱼演练系统</span>
+            </span>
+        </div>
+        <div class="auth-eyebrow">MANAGEMENT CONSOLE</div>
+        <h2 class="auth-title">登录管理台</h2>
+        <p class="auth-sub">使用管理员账号进入演练控制台。</p>
 
         {% if error %}
-        <div class="login-error">{{ error }}</div>
+        <div class="alert alert-danger auth-error" role="alert">
+            <svg class="icon" aria-hidden="true"><use href="#i-alert-circle"></use></svg>
+            <div>{{ error }}</div>
+        </div>
         {% endif %}
 
-        <form method="POST">
+        <form class="auth-form" method="POST" autocomplete="on">
             <div class="form-group">
-                <label>账号</label>
-                <input type="text" name="username" placeholder="请输入账号" autofocus>
+                <label for="username">账号</label>
+                <input id="username" type="text" name="username" placeholder="请输入账号" autocomplete="username" required autofocus>
             </div>
             <div class="form-group">
-                <label>密码</label>
-                <input type="password" name="password" placeholder="请输入密码">
+                <label for="password">密码</label>
+                <input id="password" type="password" name="password" placeholder="请输入密码" autocomplete="current-password" required>
             </div>
-            <button type="submit" class="btn btn-primary">登 录</button>
+            <button type="submit" class="btn btn-primary auth-submit">登 录</button>
         </form>
-    </div>
+
+        <p class="auth-meta">默认账号密码见项目 README；首次部署后请及时修改。</p>
+    </section>
+</main>
+
+<script src="{{ url_for('static', filename='app.js', v='20261026f') }}"></script>
 </body>
 </html>

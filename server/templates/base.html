@@ -1,33 +1,137 @@
 <!DOCTYPE html>
-<html lang="zh-CN">
+<html lang="zh-CN" data-theme="dark">
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <meta name="theme-color" content="#010102">
     <title>{% block title %}钓鱼演练系统{% endblock %}</title>
-    <link rel="stylesheet" href="{{ url_for('static', filename='style.css') }}">
+    <script>
+        (function () {
+            try {
+                var theme = localStorage.getItem('fish-theme');
+                if (theme !== 'light' && theme !== 'dark') {
+                    theme = 'dark';
+                }
+                document.documentElement.setAttribute('data-theme', theme);
+            } catch (e) {
+                document.documentElement.setAttribute('data-theme', 'dark');
+            }
+        })();
+    </script>
+    <link rel="icon" type="image/svg+xml" href="{{ url_for('static', filename='favicon.svg', v='20261026f') }}">
+    <link rel="stylesheet" href="{{ url_for('static', filename='style.css', v='20261026f') }}">
 </head>
 <body>
-<nav>
-    <span class="brand">🐟 FUZZTeam_fish</span>
-    <a href="{{ url_for('routes_web.index') }}" {% if request.endpoint == 'routes_web.index' %}class="active"{% endif %}>仪表盘</a>
-    <a href="{{ url_for('routes_web.targets') }}" {% if request.endpoint and request.endpoint.startswith('routes_web.targets') %}class="active"{% endif %}>目标管理</a>
-    <a href="{{ url_for('routes_web.exe_generate') }}" {% if request.endpoint and request.endpoint.startswith('routes_web.exe_generate') %}class="active"{% endif %}>EXE生成</a>
-    <a href="{{ url_for('routes_web.collections') }}" {% if request.endpoint == 'routes_web.collections' %}class="active"{% endif %}>采集数据</a>
-    <a href="{{ url_for('routes_web.exe_config') }}" {% if request.endpoint == 'routes_web.exe_config' %}class="active"{% endif %}>EXE配置</a>
-    <a href="{{ url_for('routes_web.data_manage') }}" {% if request.endpoint == 'routes_web.data_manage' %}class="active"{% endif %}>数据管理</a>
-    <a href="{{ url_for('routes_web.logout') }}" style="margin-left:auto;">退出</a>
-</nav>
+{% include "_icons.html" %}
+<a class="skip-link" href="#main">跳到主要内容</a>
 
-<div class="container">
-    {% with messages = get_flashed_messages(with_categories=true) %}
-    {% if messages %}
-    {% for category, msg in messages %}
-    <div class="flash-msg flash-{{ category }}">{{ msg }}</div>
-    {% endfor %}
-    {% endif %}
-    {% endwith %}
+<aside class="sidebar" id="sidebar" aria-label="主导航">
+    <a class="sidebar-brand" href="{{ url_for('routes_web.index') }}">
+        <span class="brand-mark"><svg class="icon" aria-hidden="true"><use href="#i-fish"></use></svg></span>
+        <span class="brand-text">
+            <span class="brand-name">FUZZTeam Fish</span>
+            <span class="brand-sub">钓鱼演练系统</span>
+        </span>
+    </a>
 
-    {% block content %}{% endblock %}
+    {% set ep = request.endpoint or '' %}
+    <nav class="sidebar-nav">
+        <div class="nav-label">总览</div>
+        <a class="nav-item {% if ep == 'routes_web.index' %}active{% endif %}" href="{{ url_for('routes_web.index') }}">
+            <svg class="icon" aria-hidden="true"><use href="#i-dashboard"></use></svg>
+            <span>仪表盘</span>
+        </a>
+
+        <div class="nav-label">演练</div>
+        <a class="nav-item {% if ep in ['routes_web.targets', 'routes_web.target_detail', 'routes_web.add_target_view', 'routes_web.batch_add_targets'] %}active{% endif %}" href="{{ url_for('routes_web.targets') }}">
+            <svg class="icon" aria-hidden="true"><use href="#i-target"></use></svg>
+            <span>目标管理</span>
+        </a>
+        <a class="nav-item {% if ep == 'routes_web.exe_generate' %}active{% endif %}" href="{{ url_for('routes_web.exe_generate') }}">
+            <svg class="icon" aria-hidden="true"><use href="#i-box"></use></svg>
+            <span>EXE 生成</span>
+        </a>
+        <a class="nav-item {% if ep == 'routes_web.collections' %}active{% endif %}" href="{{ url_for('routes_web.collections') }}">
+            <svg class="icon" aria-hidden="true"><use href="#i-database"></use></svg>
+            <span>采集数据</span>
+        </a>
+
+        <div class="nav-label">系统</div>
+        <a class="nav-item {% if ep == 'routes_web.exe_config' %}active{% endif %}" href="{{ url_for('routes_web.exe_config') }}">
+            <svg class="icon" aria-hidden="true"><use href="#i-sliders"></use></svg>
+            <span>EXE 配置</span>
+        </a>
+        <a class="nav-item {% if ep == 'routes_web.data_manage' %}active{% endif %}" href="{{ url_for('routes_web.data_manage') }}">
+            <svg class="icon" aria-hidden="true"><use href="#i-archive"></use></svg>
+            <span>数据管理</span>
+        </a>
+    </nav>
+
+    <div class="sidebar-foot">
+        <div class="user-chip">
+            <span class="avatar" aria-hidden="true">F</span>
+            <span class="user-meta">
+                <span class="user-name">fish</span>
+                <span class="user-role">管理员</span>
+            </span>
+        </div>
+        <a class="logout-link" href="{{ url_for('routes_web.logout') }}">
+            <svg class="icon" aria-hidden="true"><use href="#i-logout"></use></svg>
+            <span>退出登录</span>
+        </a>
+    </div>
+</aside>
+
+<div class="sidebar-backdrop" id="sidebarBackdrop"></div>
+
+<div class="app-main">
+    <header class="topbar">
+        <button class="btn btn-ghost btn-icon menu-btn" id="menuBtn" type="button" aria-label="打开菜单" aria-controls="sidebar" aria-expanded="false">
+            <svg class="icon" aria-hidden="true"><use href="#i-menu"></use></svg>
+        </button>
+        <div class="topbar-crumbs">
+            <span class="crumb-root">FUZZTeam Fish</span>
+            <span class="crumb-sep">/</span>
+            <span class="crumb-current">{% block page_name %}控制台{% endblock %}</span>
+        </div>
+        <div class="topbar-actions">
+            <span class="status-pill"><span class="status-dot" aria-hidden="true"></span>系统运行中</span>
+            <button class="theme-toggle" type="button" data-theme-toggle aria-label="切换主题">
+                <svg class="icon icon-sun" aria-hidden="true"><use href="#i-sun"></use></svg>
+                <svg class="icon icon-moon" aria-hidden="true"><use href="#i-moon"></use></svg>
+            </button>
+        </div>
+    </header>
+
+    <main class="content" id="main">
+        {% with messages = get_flashed_messages(with_categories=true) %}
+        {% if messages %}
+        <div class="flash-stack" id="flashStack">
+            {% for category, msg in messages %}
+            <div class="flash flash-{{ category }}" role="{% if category == 'error' %}alert{% else %}status{% endif %}">
+                <svg class="icon" aria-hidden="true">
+                    <use href="{% if category == 'success' %}#i-check-circle{% else %}#i-alert-circle{% endif %}"></use>
+                </svg>
+                <div class="flash-text">{{ msg }}</div>
+                <button class="flash-close" type="button" aria-label="关闭提示">
+                    <svg class="icon icon-sm" aria-hidden="true"><use href="#i-x"></use></svg>
+                </button>
+            </div>
+            {% endfor %}
+        </div>
+        {% endif %}
+        {% endwith %}
+
+        {% block content %}{% endblock %}
+    </main>
+
+    <footer class="app-footer">
+        <span>FUZZTeam Fish · 钓鱼演练系统</span>
+        <span>仅限授权的安全意识演练 · v1.0</span>
+    </footer>
 </div>
+
+<script src="{{ url_for('static', filename='app.js', v='20261026f') }}"></script>
+{% block scripts %}{% endblock %}
 </body>
 </html>
