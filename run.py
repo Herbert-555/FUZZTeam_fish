@@ -1,4 +1,5 @@
 import os
+import re
 import sys
 import argparse
 import threading
@@ -8,6 +9,28 @@ sys.path.insert(0, os.path.dirname(__file__))
 
 from server.app import create_manage_app, create_api_app
 from server.serving import NginxRequestHandler
+
+ADMIN_PATH_FILE = os.path.join(
+    os.path.dirname(os.path.abspath(__file__)), 'data', 'admin_path.txt')
+
+
+def load_or_create_admin_path():
+    """Reuse the persisted admin path so rebuilds/restarts keep the same URL."""
+    try:
+        with open(ADMIN_PATH_FILE, 'r', encoding='utf-8') as f:
+            saved = f.read().strip()
+        if re.fullmatch(r'[A-Za-z0-9_-]{6,64}', saved):
+            return saved, True
+    except OSError:
+        pass
+    admin_path = secrets.token_hex(5)
+    try:
+        os.makedirs(os.path.dirname(ADMIN_PATH_FILE), exist_ok=True)
+        with open(ADMIN_PATH_FILE, 'w', encoding='utf-8') as f:
+            f.write(admin_path)
+    except OSError:
+        pass
+    return admin_path, False
 
 
 def main():
@@ -22,8 +45,7 @@ def main():
 
     bind_host = args.host
 
-    # Generate a random 10-char admin path
-    admin_path = secrets.token_hex(5)  # 10 hex characters
+    admin_path, path_reused = load_or_create_admin_path()
 
     manage_app = create_manage_app(admin_path=admin_path)
     api_app = create_api_app()
@@ -38,6 +60,10 @@ def main():
 ====================================================
 """
     print(banner)
+    if path_reused:
+        print(f"[*] 沿用已保存的管理路径 ({ADMIN_PATH_FILE})")
+    else:
+        print(f"[*] 已生成新的管理路径并保存到 {ADMIN_PATH_FILE}")
 
     # Windows: auto-rebuild all base EXEs on startup (async)
     if sys.platform == 'win32':
