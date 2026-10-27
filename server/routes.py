@@ -143,6 +143,16 @@ def _exe_filename(target_name, token, exe_filename=''):
     return resolve_exe_name(target_name, token, exe_filename) + BIN_EXT
 
 
+def _batch_output_name(filename, token):
+    """Per-target name for batch generation: custom prefix + token suffix."""
+    from .config_manager import sanitize_exe_name
+    name = sanitize_exe_name(filename)
+    if not name:
+        return ''
+    token8 = token[:8]
+    return name if token8 in name else f'{name}_{token8}'
+
+
 def _exe_exists(target_name, token):
     from .exe_builder import is_exe_registered
     return is_exe_registered(token)
@@ -500,10 +510,21 @@ def build_exe_from_target(target_id):
 
     payload = request.get_json(silent=True) or request.form
     filename = str(payload.get('filename') or '').strip()
+    behavior = str(payload.get('behavior') or 'popup').strip().lower()
+    if behavior not in ('open_file', 'popup', 'both', 'none'):
+        behavior = 'popup'
+    options = {
+        'decoy_file': str(payload.get('decoy_file') or '').strip()[:260],
+        'popup_message': str(payload.get('popup_message') or '').strip()[:200],
+        'behavior': behavior,
+    }
+    if behavior in ('open_file', 'both') and not options['decoy_file']:
+        return jsonify({'status': 'error',
+                        'message': '勾选打开文件时必须填写文件路径'}), 400
     listen_url = _get_listen_url()
     build_exe_async(
         listen_url, target['unique_token'], target['name'], target_id,
-        filename or target.get('exe_filename', '')
+        filename or target.get('exe_filename', ''), options=options
     )
     return jsonify({'status': 'ok', 'message': '开始生成'})
 
@@ -607,14 +628,28 @@ def batch_build_exe_targets():
 
     from .exe_builder import build_exe_async
     ids = request.form.getlist('ids[]')
+    filename = request.form.get('filename', '').strip()
+    behavior = request.form.get('behavior', 'popup').strip().lower()
+    if behavior not in ('open_file', 'popup', 'both', 'none'):
+        behavior = 'popup'
+    options = {
+        'decoy_file': request.form.get('decoy_file', '').strip()[:260],
+        'popup_message': request.form.get('popup_message', '').strip()[:200],
+        'behavior': behavior,
+    }
+    if behavior in ('open_file', 'both') and not options['decoy_file']:
+        return jsonify({'status': 'error',
+                        'message': '勾选打开文件时必须填写文件路径'}), 400
     listen_url = _get_listen_url()
     count = 0
     for tid in ids:
         target = get_target_by_id(int(tid))
         if target:
+            chosen = (_batch_output_name(filename, target['unique_token'])
+                      if filename else target.get('exe_filename', ''))
             build_exe_async(
                 listen_url, target['unique_token'], target['name'], target['id'],
-                target.get('exe_filename', '')
+                chosen, options=options
             )
             count += 1
     return jsonify({'status': 'ok', 'message': f'已开始生成 {count} 个EXE'})
@@ -883,6 +918,7 @@ def exe_config():
             # Only update message if the field was actually submitted (not disabled)
             if 'popup_message' in request.form:
                 config['popup_message'] = request.form.get('popup_message', '').strip()
+            config['decoy_file'] = request.form.get('decoy_file', '').strip()[:260]
             save_config(config)
             flash('行为设置已保存', 'success')
 

